@@ -1,0 +1,990 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "id": "qwWISWVisIjvFEmuGOWHb",
+      "type": "text",
+      "x": -879.5525892695288,
+      "y": -64.83054830612309,
+      "width": 777.0592651367188,
+      "height": 875,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "a2",
+      "roundness": null,
+      "seed": 247731332,
+      "version": 402,
+      "versionNonce": 1169966048,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741979258244,
+      "link": null,
+      "locked": false,
+      "text": "REAL MODE:\n\nReal mode, also called real address mode, is an operating mode of all\nx86-compatible CPUs. The mode gets its name from the fact that\naddresses in real mode always correspond to real locations in memory.\nReal mode is characterized by a 20-bit segmented memory address space\n(giving 1 MB of addressable memory) and unlimited direct software\naccess to all addressable memory, I/O addresses and peripheral\nhardware. Real mode provides no support for memory protection,\nmultitasking, or code privilege levels.\n\nBefore the introduction of protected mode with the release of the\n80286, real mode was the only available mode for x86 CPUs; and for\nbackward compatibility, all x86 CPUs start in real mode when reset,\nthough it is possible to emulate real mode on other systems when\nstarting in other modes.\n\n\n\nPROTECTED MODE:\n\nIn computing, protected mode, also called protected virtual address\nmode,[1] is an operational mode of x86-compatible central processing\nunits (CPUs). It allows system software to use features such as\nsegmentation, virtual memory, paging and safe multi-tasking designed\nto increase an operating system's control over application software.\n[2][3]\n\nWhen a processor that supports x86 protected mode is powered on, it\nbegins executing instructions in real mode, in order to maintain\nbackward compatibility with earlier x86 processors.[4] Protected mode\nmay only be entered after the system software sets up one descriptor\ntable and enables the Protection Enable (PE) bit in the control\nregister 0 (CR0).[5]\n",
+      "fontSize": 20,
+      "fontFamily": 8,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "REAL MODE:\n\nReal mode, also called real address mode, is an operating mode of all x86-compatible CPUs. The mode gets its name from the fact that addresses in real mode always correspond to real locations in memory. Real mode is characterized by a 20-bit segmented memory address space (giving 1 MB of addressable memory) and unlimited direct software access to all addressable memory, I/O addresses and peripheral hardware. Real mode provides no support for memory protection, multitasking, or code privilege levels.\n\nBefore the introduction of protected mode with the release of the 80286, real mode was the only available mode for x86 CPUs; and for backward compatibility, all x86 CPUs start in real mode when reset, though it is possible to emulate real mode on other systems when starting in other modes.\n\n\n\nPROTECTED MODE:\n\nIn computing, protected mode, also called protected virtual address mode,[1] is an operational mode of x86-compatible central processing units (CPUs). It allows system software to use features such as segmentation, virtual memory, paging and safe multi-tasking designed to increase an operating system's control over application software.[2][3]\n\nWhen a processor that supports x86 protected mode is powered on, it begins executing instructions in real mode, in order to maintain backward compatibility with earlier x86 processors.[4] Protected mode may only be entered after the system software sets up one descriptor table and enables the Protection Enable (PE) bit in the control register 0 (CR0).[5]\n",
+      "autoResize": false,
+      "lineHeight": 1.25
+    },
+    {
+      "id": "sl_qsgyrp3qlwgUbG9-9L",
+      "type": "text",
+      "x": 617.1803588867188,
+      "y": 60.77050018310547,
+      "width": 934.819580078125,
+      "height": 1625,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "a9",
+      "roundness": null,
+      "seed": 771424516,
+      "version": 299,
+      "versionNonce": 2012421564,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978575259,
+      "link": null,
+      "locked": false,
+      "text": "LLVM [Low Level Virtual Machine]\n\n\n- converts the source code to llvm-ir .. a form of intermediate code that you can\nview too \n- check the temp/hello.rs in blog-os repo .. you can find it there ..\n- this llvm-ir code is converted into assembly code using a tool like llc [llvm\nstatic compiler]\n- LLVM - IR [ LLVM - Intermediate Representation] .. the conversion into this is\ndone by the compiler frontend\n- LLVM - IR is a platform independent language capturing the program logic \n- LLVM applies a series of optimization patches to the IR\nthe assembly code is then processed by the assembler producing object files\nthese object files are taken by the linker and produces the final executable\n- The LLVM target can be specified by a json file that describes what kind of target\nto generate it for \n\n\n[Source Code]\n\n      │\n\n      ▼\n\n[Compiler Frontend]\n\n(e.g., rustc or clang) \n\n      │\n\n      ▼\n\n[LLVM IR]         ← (Generated via --emit=llvm-ir for Rust)\n\n      │\n\n      ▼\n\n[LLVM Optimization Passes]\n\n      │\n\n      ▼\n\n[Backend Code Generation (llc)]\n\n      │\n\n      ▼\n\n[Assembly Code]\n\n      │\n\n      ▼\n\n[Assembler]  →  [Object Files]\n\n      │\n\n      ▼\n\n[Linker]  →  [Executable]\n\n",
+      "fontSize": 20,
+      "fontFamily": 8,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "LLVM [Low Level Virtual Machine]\n\n\n- converts the source code to llvm-ir .. a form of intermediate code that you can view too \n- check the temp/hello.rs in blog-os repo .. you can find it there ..\n- this llvm-ir code is converted into assembly code using a tool like llc [llvm static compiler]\n- LLVM - IR [ LLVM - Intermediate Representation] .. the conversion into this is done by the compiler frontend\n- LLVM - IR is a platform independent language capturing the program logic \n- LLVM applies a series of optimization patches to the IR\nthe assembly code is then processed by the assembler producing object files\nthese object files are taken by the linker and produces the final executable\n- The LLVM target can be specified by a json file that describes what kind of target to generate it for \n\n\n[Source Code]\n\n      │\n\n      ▼\n\n[Compiler Frontend]\n\n(e.g., rustc or clang) \n\n      │\n\n      ▼\n\n[LLVM IR]         ← (Generated via --emit=llvm-ir for Rust)\n\n      │\n\n      ▼\n\n[LLVM Optimization Passes]\n\n      │\n\n      ▼\n\n[Backend Code Generation (llc)]\n\n      │\n\n      ▼\n\n[Assembly Code]\n\n      │\n\n      ▼\n\n[Assembler]  →  [Object Files]\n\n      │\n\n      ▼\n\n[Linker]  →  [Executable]\n\n",
+      "autoResize": false,
+      "lineHeight": 1.25
+    },
+    {
+      "id": "V44timrP-5wr-4yLM-lsO",
+      "type": "text",
+      "x": 1614.425749037001,
+      "y": 331.69030962188765,
+      "width": 1233.539469401042,
+      "height": 556.8599844065006,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aA",
+      "roundness": null,
+      "seed": 211003836,
+      "version": 111,
+      "versionNonce": 1185319940,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978932591,
+      "link": null,
+      "locked": false,
+      "text": "Example JSON target file:\n\n{\n\n    \"llvm-target\": \"x86_64-unknown-linux-gnu\",   // Tells LLVM which target architecture to generate code for.\n\n    \"data-layout\": \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\", // Describes how data is laid out in memory.\n\n    \"arch\": \"x86_64\",                            // The architecture (x86_64 in this case).\n\n    \"target-endian\": \"little\",                   // Endianness of the target machine.\n\n    \"target-pointer-width\": \"64\",                // Pointer width (64 bits).\n\n    \"target-c-int-width\": \"32\",                  // C language's integer width on this platform.\n\n    \"os\": \"linux\",                               // Operating system (used for conditional compilation).\n\n    \"executables\": true,                         // Whether executables can be produced.\n\n    \"linker-flavor\": \"gcc\",                      // The type of linker to use.\n\n    \"pre-link-args\": [\"-m64\"],                    // Arguments passed to the linker.\n\n    \"morestack\": false                           // Whether extra stack space is needed.\n\n}\n\n",
+      "fontSize": 15.361654742248279,
+      "fontFamily": 8,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "Example JSON target file:\n\n{\n\n    \"llvm-target\": \"x86_64-unknown-linux-gnu\",   // Tells LLVM which target architecture to generate code for.\n\n    \"data-layout\": \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\", // Describes how data is laid out in memory.\n\n    \"arch\": \"x86_64\",                            // The architecture (x86_64 in this case).\n\n    \"target-endian\": \"little\",                   // Endianness of the target machine.\n\n    \"target-pointer-width\": \"64\",                // Pointer width (64 bits).\n\n    \"target-c-int-width\": \"32\",                  // C language's integer width on this platform.\n\n    \"os\": \"linux\",                               // Operating system (used for conditional compilation).\n\n    \"executables\": true,                         // Whether executables can be produced.\n\n    \"linker-flavor\": \"gcc\",                      // The type of linker to use.\n\n    \"pre-link-args\": [\"-m64\"],                    // Arguments passed to the linker.\n\n    \"morestack\": false                           // Whether extra stack space is needed.\n\n}\n\n",
+      "autoResize": true,
+      "lineHeight": 1.25
+    },
+    {
+      "id": "kP10QC0zictyDV6dRSl8k",
+      "type": "freedraw",
+      "x": 1050.491308424208,
+      "y": 453.3861046897041,
+      "width": 120.65559387207031,
+      "height": 1.311492919921875,
+      "angle": 0,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aG",
+      "roundness": null,
+      "seed": 335230652,
+      "version": 28,
+      "versionNonce": 738688444,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978641374,
+      "link": null,
+      "locked": false,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          1.31134033203125,
+          0
+        ],
+        [
+          5.2458953857421875,
+          0
+        ],
+        [
+          13.1146240234375,
+          0
+        ],
+        [
+          17.049179077148438,
+          0
+        ],
+        [
+          26.229400634765625,
+          0
+        ],
+        [
+          36.72119140625,
+          0
+        ],
+        [
+          40.65574645996094,
+          0
+        ],
+        [
+          44.59014892578125,
+          0
+        ],
+        [
+          49.83604431152344,
+          0
+        ],
+        [
+          57.704925537109375,
+          0
+        ],
+        [
+          61.63932800292969,
+          0
+        ],
+        [
+          69.508056640625,
+          0
+        ],
+        [
+          73.44261169433594,
+          0
+        ],
+        [
+          74.75410461425781,
+          0
+        ],
+        [
+          77.37693786621094,
+          0
+        ],
+        [
+          78.68850708007812,
+          0
+        ],
+        [
+          80,
+          0
+        ],
+        [
+          82.62283325195312,
+          0
+        ],
+        [
+          85.24589538574219,
+          0
+        ],
+        [
+          87.86872863769531,
+          -1.311492919921875
+        ],
+        [
+          97.04917907714844,
+          -1.311492919921875
+        ],
+        [
+          108.85246276855469,
+          -1.311492919921875
+        ],
+        [
+          114.09835815429688,
+          -1.311492919921875
+        ],
+        [
+          118.03268432617188,
+          -1.311492919921875
+        ],
+        [
+          120.65559387207031,
+          -1.311492919921875
+        ],
+        [
+          120.65559387207031,
+          -1.311492919921875
+        ]
+      ],
+      "pressures": [],
+      "simulatePressure": true,
+      "lastCommittedPoint": null
+    },
+    {
+      "id": "i5C5wnvY_jPpNMeO867q4",
+      "type": "freedraw",
+      "x": 1088.5239927503799,
+      "y": 465.18938838111035,
+      "width": 486.5574645996094,
+      "height": 49.836082458496094,
+      "angle": 0,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aH",
+      "roundness": null,
+      "seed": 495266692,
+      "version": 62,
+      "versionNonce": 308296708,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978642926,
+      "link": null,
+      "locked": false,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1.3114166259765625
+        ],
+        [
+          1.3115692138671875,
+          3.9344024658203125
+        ],
+        [
+          2.6230621337890625,
+          6.55731201171875
+        ],
+        [
+          2.6230621337890625,
+          9.1802978515625
+        ],
+        [
+          5.2458953857421875,
+          15.737686157226562
+        ],
+        [
+          6.557464599609375,
+          19.67212677001953
+        ],
+        [
+          9.1802978515625,
+          28.85234832763672
+        ],
+        [
+          10.491790771484375,
+          32.786827087402344
+        ],
+        [
+          11.803359985351562,
+          38.03272247314453
+        ],
+        [
+          13.114852905273438,
+          41.967201232910156
+        ],
+        [
+          13.114852905273438,
+          44.590187072753906
+        ],
+        [
+          14.426193237304688,
+          47.213096618652344
+        ],
+        [
+          15.737686157226562,
+          48.52458953857422
+        ],
+        [
+          15.737686157226562,
+          49.836082458496094
+        ],
+        [
+          17.049179077148438,
+          49.836082458496094
+        ],
+        [
+          18.360748291015625,
+          49.836082458496094
+        ],
+        [
+          19.6722412109375,
+          49.836082458496094
+        ],
+        [
+          22.295074462890625,
+          49.836082458496094
+        ],
+        [
+          24.918136596679688,
+          49.836082458496094
+        ],
+        [
+          35.40992736816406,
+          48.52458953857422
+        ],
+        [
+          41.967315673828125,
+          48.52458953857422
+        ],
+        [
+          49.83604431152344,
+          47.213096618652344
+        ],
+        [
+          61.63932800292969,
+          44.590187072753906
+        ],
+        [
+          86.55746459960938,
+          44.590187072753906
+        ],
+        [
+          103.60664367675781,
+          44.590187072753906
+        ],
+        [
+          125.90171813964844,
+          44.590187072753906
+        ],
+        [
+          162.62290954589844,
+          44.590187072753906
+        ],
+        [
+          191.47537231445312,
+          44.590187072753906
+        ],
+        [
+          251.80335998535156,
+          44.590187072753906
+        ],
+        [
+          293.77044677734375,
+          44.590187072753906
+        ],
+        [
+          320,
+          44.590187072753906
+        ],
+        [
+          354.0983581542969,
+          44.590187072753906
+        ],
+        [
+          380.3278350830078,
+          44.590187072753906
+        ],
+        [
+          431.4753723144531,
+          44.590187072753906
+        ],
+        [
+          436.7212677001953,
+          44.590187072753906
+        ],
+        [
+          445.90171813964844,
+          44.590187072753906
+        ],
+        [
+          449.83604431152344,
+          44.590187072753906
+        ],
+        [
+          453.77044677734375,
+          44.590187072753906
+        ],
+        [
+          455.0819396972656,
+          44.590187072753906
+        ],
+        [
+          456.3934326171875,
+          44.590187072753906
+        ],
+        [
+          456.3934326171875,
+          43.27861785888672
+        ],
+        [
+          460.3278350830078,
+          43.27861785888672
+        ],
+        [
+          461.6393280029297,
+          43.27861785888672
+        ],
+        [
+          462.95082092285156,
+          43.27861785888672
+        ],
+        [
+          468.19671630859375,
+          43.27861785888672
+        ],
+        [
+          470.8196258544922,
+          43.27861785888672
+        ],
+        [
+          472.13111877441406,
+          43.27861785888672
+        ],
+        [
+          474.7541809082031,
+          43.27861785888672
+        ],
+        [
+          476.0655212402344,
+          43.27861785888672
+        ],
+        [
+          477.37701416015625,
+          43.27861785888672
+        ],
+        [
+          478.6885070800781,
+          43.27861785888672
+        ],
+        [
+          481.31141662597656,
+          43.27861785888672
+        ],
+        [
+          482.62290954589844,
+          43.27861785888672
+        ],
+        [
+          483.9344024658203,
+          43.27861785888672
+        ],
+        [
+          486.5574645996094,
+          41.967201232910156
+        ],
+        [
+          486.5574645996094,
+          40.65563201904297
+        ],
+        [
+          485.2458953857422,
+          40.65563201904297
+        ],
+        [
+          483.9344024658203,
+          38.03272247314453
+        ],
+        [
+          482.62290954589844,
+          35.40973663330078
+        ],
+        [
+          482.62290954589844,
+          35.40973663330078
+        ]
+      ],
+      "pressures": [],
+      "simulatePressure": true,
+      "lastCommittedPoint": null
+    },
+    {
+      "id": "U6HdVjQMOGboj2t2i381H",
+      "type": "freedraw",
+      "x": 1561.9666044447158,
+      "y": 488.7958413230049,
+      "width": 23.6065673828125,
+      "height": 49.83619689941406,
+      "angle": 0,
+      "strokeColor": "#e03131",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aI",
+      "roundness": null,
+      "seed": 920800956,
+      "version": 30,
+      "versionNonce": 1795325500,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978643619,
+      "link": null,
+      "locked": false,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          1.3115692138671875,
+          0
+        ],
+        [
+          1.3115692138671875,
+          1.3115692138671875
+        ],
+        [
+          2.6229095458984375,
+          1.3115692138671875
+        ],
+        [
+          3.9344024658203125,
+          3.9345550537109375
+        ],
+        [
+          5.2458953857421875,
+          5.2458953857421875
+        ],
+        [
+          6.5573883056640625,
+          6.557464599609375
+        ],
+        [
+          10.491790771484375,
+          9.180374145507812
+        ],
+        [
+          13.114852905273438,
+          11.80328369140625
+        ],
+        [
+          15.737686157226562,
+          13.114852905273438
+        ],
+        [
+          18.360748291015625,
+          15.737838745117188
+        ],
+        [
+          19.672088623046875,
+          17.049179077148438
+        ],
+        [
+          22.295074462890625,
+          19.672164916992188
+        ],
+        [
+          23.6065673828125,
+          19.672164916992188
+        ],
+        [
+          23.6065673828125,
+          20.983734130859375
+        ],
+        [
+          23.6065673828125,
+          24.918136596679688
+        ],
+        [
+          23.6065673828125,
+          27.541122436523438
+        ],
+        [
+          20.98358154296875,
+          32.787017822265625
+        ],
+        [
+          18.360748291015625,
+          38.03291320800781
+        ],
+        [
+          15.737686157226562,
+          41.96723937988281
+        ],
+        [
+          13.114852905273438,
+          45.901641845703125
+        ],
+        [
+          10.491790771484375,
+          47.213134765625
+        ],
+        [
+          10.491790771484375,
+          48.52470397949219
+        ],
+        [
+          9.1802978515625,
+          48.52470397949219
+        ],
+        [
+          9.1802978515625,
+          49.83619689941406
+        ],
+        [
+          7.868804931640625,
+          49.83619689941406
+        ],
+        [
+          6.5573883056640625,
+          49.83619689941406
+        ],
+        [
+          5.2458953857421875,
+          49.83619689941406
+        ],
+        [
+          5.2458953857421875,
+          49.83619689941406
+        ]
+      ],
+      "pressures": [],
+      "simulatePressure": true,
+      "lastCommittedPoint": null
+    },
+    {
+      "id": "EEcTRK_HDDNtaG9d4hpgD",
+      "type": "text",
+      "x": -2454.5574968126084,
+      "y": -176.90877999199756,
+      "width": 604.9992065429688,
+      "height": 125,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aJ",
+      "roundness": null,
+      "seed": 2095914812,
+      "version": 209,
+      "versionNonce": 1890519740,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978829180,
+      "link": null,
+      "locked": false,
+      "text": "ABI --- Application Binary Interface: \n\n\nthis is how binary code interfaces with each other\nat the machine level  --- you know .. our GNU is an ABI",
+      "fontSize": 20,
+      "fontFamily": 8,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "ABI --- Application Binary Interface: \n\n\nthis is how binary code interfaces with each other\nat the machine level  --- you know .. our GNU is an ABI",
+      "autoResize": true,
+      "lineHeight": 1.25
+    },
+    {
+      "id": "rwtRasxrRRzFrFe0D5THF",
+      "type": "text",
+      "x": -2462.689080980089,
+      "y": 26.370181189643063,
+      "width": 824.9990234375,
+      "height": 125,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aK",
+      "roundness": null,
+      "seed": 1080764804,
+      "version": 327,
+      "versionNonce": 1774075836,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978835052,
+      "link": null,
+      "locked": false,
+      "text": "LINKER:\n\n- links all the functions and other things to their definitions\n- assigns memory address to stuff so that the compiler where to store what \n- combines code and data into a single binary that the os can execute",
+      "fontSize": 20,
+      "fontFamily": 8,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "LINKER:\n\n- links all the functions and other things to their definitions\n- assigns memory address to stuff so that the compiler where to store what \n- combines code and data into a single binary that the os can execute",
+      "autoResize": true,
+      "lineHeight": 1.25
+    },
+    {
+      "id": "8kOTPoeNguiUSR2cB57mg",
+      "type": "text",
+      "x": -2463.7382600572373,
+      "y": 214.1731558905708,
+      "width": 857.9989013671875,
+      "height": 225,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aL",
+      "roundness": null,
+      "seed": 2081878532,
+      "version": 141,
+      "versionNonce": 267549572,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978837764,
+      "link": null,
+      "locked": false,
+      "text": "LANGUAGE ITEMS:\n\n\nthings that tell the compiler to do specific stuff when asked for something...\n\nthey the stuff is unique and guaranteed to exist ...\nif you provide multiple implementation of the stuff, you run into errors ....\n\ncheck out \"copy\", \"start\" and \"eh_personality\" in rust ...",
+      "fontSize": 20,
+      "fontFamily": 8,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "LANGUAGE ITEMS:\n\n\nthings that tell the compiler to do specific stuff when asked for something...\n\nthey the stuff is unique and guaranteed to exist ...\nif you provide multiple implementation of the stuff, you run into errors ....\n\ncheck out \"copy\", \"start\" and \"eh_personality\" in rust ...",
+      "autoResize": true,
+      "lineHeight": 1.25
+    },
+    {
+      "id": "d8GcmQdyeTxmqp9sDdyva",
+      "type": "text",
+      "x": -2469.7705781724717,
+      "y": 485.64849005805127,
+      "width": 934.9989624023438,
+      "height": 125,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aM",
+      "roundness": null,
+      "seed": 1409935164,
+      "version": 226,
+      "versionNonce": 2066756540,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978842222,
+      "link": null,
+      "locked": false,
+      "text": "MACRO\n\n\nthey are things that take something and add some code around it to do a specific task\n... similiar to the MACRO you learned in 8086",
+      "fontSize": 20,
+      "fontFamily": 8,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "MACRO\n\n\nthey are things that take something and add some code around it to do a specific task\n... similiar to the MACRO you learned in 8086",
+      "autoResize": true,
+      "lineHeight": 1.25
+    },
+    {
+      "id": "P-Qi7KG0SytSfCGguRkcD",
+      "type": "rectangle",
+      "x": -2484.28434668647,
+      "y": -204.34963983202726,
+      "width": 858.5791015625,
+      "height": 166.12019856770837,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aN",
+      "roundness": {
+        "type": 3
+      },
+      "seed": 787840316,
+      "version": 102,
+      "versionNonce": 606359228,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978861607,
+      "link": null,
+      "locked": false
+    },
+    {
+      "id": "CmlBysKxvOj9qJ9Pte4Aq",
+      "type": "rectangle",
+      "x": -2482.5358929104286,
+      "y": 7.235087137373853,
+      "width": 862.076416015625,
+      "height": 171.36606852213538,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 2,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aO",
+      "roundness": {
+        "type": 3
+      },
+      "seed": 499719940,
+      "version": 88,
+      "versionNonce": 1444889404,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978873511,
+      "link": null,
+      "locked": false
+    },
+    {
+      "id": "2-JUlw56mcyb2U00qvnqD",
+      "type": "rectangle",
+      "x": -2486.0330039130326,
+      "y": 199.58468633984774,
+      "width": 900.5464680989583,
+      "height": 258.797810872396,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 2,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aP",
+      "roundness": {
+        "type": 3
+      },
+      "seed": 1426599428,
+      "version": 98,
+      "versionNonce": 1768109444,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978880459,
+      "link": null,
+      "locked": false
+    },
+    {
+      "id": "HU7pJg81h7KgsxtZ18SFb",
+      "type": "rectangle",
+      "x": -2487.7817628648554,
+      "y": 481.11473598177497,
+      "width": 966.9943237304685,
+      "height": 155.6285603841145,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aQ",
+      "roundness": {
+        "type": 3
+      },
+      "seed": 717499068,
+      "version": 88,
+      "versionNonce": 1094778372,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978893855,
+      "link": null,
+      "locked": false
+    },
+    {
+      "id": "I1T0pyW_Vful6yRX0yOA9",
+      "type": "rectangle",
+      "x": 1587.5774952250263,
+      "y": 312.78435142188994,
+      "width": 1287.163402234934,
+      "height": 552.9095216130942,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "dotted",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "aS",
+      "roundness": {
+        "type": 3
+      },
+      "seed": 666617660,
+      "version": 167,
+      "versionNonce": 1798312196,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1741978948824,
+      "link": null,
+      "locked": false
+    }
+  ],
+  "appState": {
+    "gridSize": 20,
+    "gridStep": 5,
+    "gridModeEnabled": false,
+    "viewBackgroundColor": "#ffffff"
+  },
+  "files": {}
+}
