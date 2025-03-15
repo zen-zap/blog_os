@@ -108,7 +108,34 @@ impl Writer {
     /// prints a new line to the VGA buffer
     pub fn new_line(&mut self)
     {
-        // TODO
+        // move every character one line up and delete the upmost one
+
+        for row in 1..BUFFER_HEIGHT
+        {
+            for col in 0..BUFFER_WIDTH
+            {
+                let character = self.buffer.chars[row][col].read();  // the read() method is provided by the Volatile type
+                self.buffer.chars[row-1][col].write(character);
+            }
+        }
+
+        self.clear_row(BUFFER_HEIGHT-1);
+        self.column_position=0;
+    }
+
+    /// clears a raw by writing all of its characters with a space character
+    fn clear_row(&mut self, row: usize)
+    {
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
+
+        for col in 0.. BUFFER_WIDTH
+        {
+            self.buffer.chars[row][col].write(blank);
+            // the write method here is also provided by the Volatile type
+        }
     }
 
     /// write a string into the VGA buffer <br>
@@ -144,6 +171,8 @@ pub fn print_something()
         color_code: ColorCode::new(Color::Yellow, Color::Blue),
         buffer: unsafe {
             &mut *(0xb8000 as *mut Buffer)
+                // casting it into a raw mutable pointer and then derefencing through * and then
+                // again getting a mutable pointer from that .. 
         },
     };
 
@@ -163,4 +192,20 @@ impl fmt::Write for Writer {
         self.write_string(s);
         Ok(())
     }
+}
+
+
+use lazy_static::lazy_static;
+use spin::Mutex;
+
+lazy_static! {
+    /// to create a global writer that can be used as an interface from other modules 
+    /// without carrying a Writer instance around.. 
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+        column_position: 0,
+        color_code: ColorCode::new(Color::Yellow, Color::Red),
+        buffer: unsafe {
+            &mut *(0xb8000 as *mut Buffer)
+        },
+    });
 }
