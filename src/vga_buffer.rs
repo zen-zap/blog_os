@@ -3,6 +3,9 @@
 
 #[allow(dead_code)]
 
+/// refer [here](https://os.phil-opp.com/vga-text-mode/#volatile)
+use volatile::Volatile;
+
 // gotta make some colors .. the bright bit combines with the normal bits to form the bright colors
 // in the VGA buffer 
 //
@@ -63,7 +66,7 @@ const BUFFER_WIDTH: usize = 80;
 #[repr(transparent)]
 struct Buffer {
     /// 2D array to represent characters
-    chars: [[ScreenChar; BUFFER_WIDTH]; BUFFER_HEIGHT], 
+    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT], 
 }
 
 /// writer type to write into the screen [VGA]
@@ -93,10 +96,10 @@ impl Writer {
                 let col = self.column_position;
 
                 let color_code = self.color_code;
-                self.buffer.chars[row][col] = ScreenChar {
+                self.buffer.chars[row][col].write(ScreenChar {  // the compiler will never optimize this write
                     ascii_character: byte,
                     color_code: color_code,
-                };
+                });
                 self.column_position += 1; // since you wrote one byte move to the next column
             }
         }
@@ -134,6 +137,8 @@ impl Writer {
 
 pub fn print_something() 
 {
+    use core::fmt::Write;
+
     let mut writer = Writer {
         column_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Blue),
@@ -144,5 +149,18 @@ pub fn print_something()
 
     writer.write_byte(b'H');
     writer.write_string("ello ");
-    writer.write_string("Wörld!");
+    write!(writer, "The numbers are {} and {}", 42, 1.0/3.0).unwrap();
+}
+
+
+use core::fmt;
+
+/// to support different formatting macros too!
+/// gotta implement the core::fmt::Write trait -- used by write! and writeln!
+impl fmt::Write for Writer {
+    // gotta implement this ... for the trait to work!
+    fn write_str(&mut self, s: &str) -> fmt::Result { // Result<(), fmt::Error>
+        self.write_string(s);
+        Ok(())
+    }
 }
