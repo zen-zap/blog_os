@@ -209,3 +209,31 @@ lazy_static! {
         },
     });
 }
+
+
+#[macro_export]  // makes it availble for the entire crate to use
+macro_rules! print {
+    // tt stands for token tree
+    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+    // this macro invokes _print
+}
+
+
+// Picked these up from the standard library
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    // print! invokes the print! macro which in turn invokes _print
+}
+
+// $crate helps us expand to the current crate's root path
+
+
+#[doc(hidden)] // hidden since it's an internal thingy 
+               // hide it from the generated documentation
+pub fn _print(args: fmt::Arguments)
+{
+    use core::fmt::Write;
+    WRITER.lock().write_fmt(args).unwrap(); 
+}

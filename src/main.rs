@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unreachable_code)]
 #![no_std]
 #![no_main] // disabling all rust level entry points 
 // #![feature(asm)] // for inline assembly -- has been a feature since a while in the nightly versions
@@ -10,7 +11,8 @@ use core::panic::PanicInfo;
 mod vga_buffer;
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    println!("{}", info);
     loop {}
 }
 
@@ -20,9 +22,14 @@ static HELLO: &[u8] = b"Hello World";
 pub extern "C" fn _start() -> ! {
     // vga_buffer::print_something();
 
-    use core::fmt::Write;
-    vga_buffer::WRITER.lock().write_str("hello again!").unwrap();
-    write!(vga_buffer::WRITER.lock(), ", some numbers: {} {}", 42, 1.6969).unwrap();
+    // use core::fmt::Write;
+    // vga_buffer::WRITER.lock().write_str("hello again!").unwrap();
+    // write!(vga_buffer::WRITER.lock(), ", some numbers: {} {}", 42, 1.6969).unwrap();
+    
+    println!("Hello World{}", "!"); 
+    // don't have to import the macro since it already lives in the root namespace
+    //
+    panic!("This is a test panic message!");
 
     loop{}
 }
