@@ -2,6 +2,13 @@
 #![allow(unreachable_code)]
 #![no_std]
 #![no_main] // disabling all rust level entry points 
+// set the test_framework_entry_function to "test_main" and call it from the _start entry point
+#![reexport_test_harness_main = "test_main"]
+// To implement a custom test framework!
+#![feature(custom_test_frameworks)]
+#![test_runner(crate::test_runner)]
+
+
 // #![feature(asm)] // for inline assembly -- has been a feature since a while in the nightly versions
 
 // we need a panic handler .. the std implements its own .. we need our own .. since we're not
@@ -18,6 +25,7 @@ fn panic(info: &PanicInfo) -> ! {
 
 static HELLO: &[u8] = b"Hello World";
 
+
 #[no_mangle] // read about this a bit
 pub extern "C" fn _start() -> ! {
     // vga_buffer::print_something();
@@ -28,10 +36,29 @@ pub extern "C" fn _start() -> ! {
     
     println!("Hello World{}", "!"); 
     // don't have to import the macro since it already lives in the root namespace
-    //
+    
     panic!("This is a test panic message!");
+
+
+    #[cfg(test)]
+    test_main();
 
     loop{}
 }
 
 // to include nightly features we can use feature flags and use them
+
+
+#[cfg(test)]
+/// takes the tests(functions) as arguments
+/// iterates over each function
+/// - Fn() is a trait [functions that don't take arguments and don't return anything] and dyn Fn() is a trait object
+///
+/// - we just iterate over this list of functins ... used for testing
+pub fn test_runner(tests: &[&dyn Fn()])
+{
+    println!("Running {} tests", tests.len());
+    for test in tests{
+        test(); // call each test function in the list
+    }
+}
