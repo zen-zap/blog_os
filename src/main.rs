@@ -16,6 +16,7 @@
 //
 use core::panic::PanicInfo;
 mod vga_buffer;
+mod serial;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -57,7 +58,7 @@ pub extern "C" fn _start() -> ! {
 /// - we just iterate over this list of functins ... used for testing
 pub fn test_runner(tests: &[&dyn Fn()])
 {
-    println!("Running {} tests", tests.len());
+    serial_println!("Running {} tests", tests.len());
     for test in tests{
         test(); // call each test function in the list
     }
@@ -69,9 +70,9 @@ pub fn test_runner(tests: &[&dyn Fn()])
 #[test_case]
 fn trivial_assertion()
 {
-    println!("trivial assertion .... don't mind me!");
+    serial_println!("trivial assertion .... don't mind me!");
     assert_eq!(1, 1);
-    println!("[ok]");
+    serial_println!("[ok]");
 }
 
 
