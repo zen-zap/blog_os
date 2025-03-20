@@ -3,7 +3,7 @@
 #![no_std]
 #![no_main] // disabling all rust level entry points 
 // set the test_framework_entry_function to "test_main" and call it from the _start entry point
-#![reexport_test_harness_main = "test_main"]
+#![reexport_test_harness_main = "test_main"]  // reexport the generated test-harness main function as "test_main"
 // To implement a custom test framework!
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
@@ -37,11 +37,11 @@ pub extern "C" fn _start() -> ! {
     println!("Hello World{}", "!"); 
     // don't have to import the macro since it already lives in the root namespace
     
-    panic!("This is a test panic message!");
+    // panic!("This is a test panic message!");
 
 
     #[cfg(test)]
-    test_main();
+    test_main(); // call the re-exported test harness when testing
 
     loop{}
 }
@@ -61,4 +61,12 @@ pub fn test_runner(tests: &[&dyn Fn()])
     for test in tests{
         test(); // call each test function in the list
     }
+}
+
+#[test_case]
+fn trivial_assertion()
+{
+    println!("trivial assertion .... don't mind me!");
+    assert_eq!(1, 1);
+    println!("[ok]");
 }
