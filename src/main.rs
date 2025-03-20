@@ -61,6 +61,9 @@ pub fn test_runner(tests: &[&dyn Fn()])
     for test in tests{
         test(); // call each test function in the list
     }
+
+    // to exit_qemu -- cargo considers all error codes other than 0 as Failures
+    exit_qemu(QemuExitCode::Success);
 }
 
 #[test_case]
@@ -69,4 +72,30 @@ fn trivial_assertion()
     println!("trivial assertion .... don't mind me!");
     assert_eq!(1, 1);
     println!("[ok]");
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+/// QemuExitCode:
+/// - Success: 0x10
+/// - Failure: 0x11
+///
+/// They shouldn't clash with the default exit codes of QEMU
+pub enum QemuExitCode {
+    Success = 0x10,
+    Failed = 0x11,
+}
+
+/// function to exit QEMU
+/// Takes in a QemuExitCode as its argument
+pub fn exit_qemu(exit_code: QemuExitCode)
+{
+    use x86_64::instructions::port::Port;
+
+    unsafe
+    {
+        let mut port = Port::new(0xf4); // creates a new Port at 0xf4, which is the iobase of the isa-debug-exit device
+        port.write(exit_code as u32);
+    }
 }
