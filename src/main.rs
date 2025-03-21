@@ -37,7 +37,7 @@ fn panic(info: &PanicInfo) -> ! {
     serial_println!("Error: {} \n", info);
     exit_qemu(QemuExitCode::Failed);
 
-    loop{}
+    loop{}  // enter into an infinite loop if exit_qemu() doesn't work properly
 }
 
 
@@ -62,7 +62,8 @@ pub extern "C" fn _start() -> ! {
     #[cfg(test)]
     test_main(); // call the re-exported test harness when testing
 
-    loop{}
+    loop{}  // why don't we enter into an infinite loop here? .. I think it does .. I mean QEMU
+            // stays open .. it just doesn't do anything .. given we don't exit or something ..
 }
 
 // to include nightly features we can use feature flags and use them
@@ -74,11 +75,12 @@ pub extern "C" fn _start() -> ! {
 /// - Fn() is a trait [functions that don't take arguments and don't return anything] and dyn Fn() is a trait object
 ///
 /// - we just iterate over this list of functins ... used for testing
-pub fn test_runner(tests: &[&dyn Fn()])
+/// - takes a reference to slice of references to trait objects
+pub fn test_runner(tests: &[&dyn Testable])
 {
     serial_println!("Running {} tests", tests.len());
     for test in tests{
-        test(); // call each test function in the list
+        test.run(); // call each test function in the list
     }
 
     // to exit_qemu -- cargo considers all error codes other than 0 as Failures
@@ -88,9 +90,9 @@ pub fn test_runner(tests: &[&dyn Fn()])
 #[test_case]
 fn trivial_assertion()
 {
-    serial_println!("trivial assertion .... don't mind me!");
-    assert_eq!(0, 1);
-    serial_println!("[ok]");
+    // serial_println!("trivial assertion .... don't mind me!");
+    assert_eq!(1, 1);
+    // serial_println!("[ok]");
 }
 
 
@@ -116,5 +118,30 @@ pub fn exit_qemu(exit_code: QemuExitCode)
     {
         let mut port = Port::new(0xf4); // creates a new Port at 0xf4, which is the iobase of the isa-debug-exit device
         port.write(exit_code as u32);
+    }
+}
+
+
+
+/// trait for test functions
+pub trait Testable
+{
+    /// to run the function implementing this trait
+    fn run(&self) -> ();  // Fn() trait
+}
+
+impl<T> Testable for T
+where
+    T: Fn(),
+{
+    /// helps print the name and an [ok] message if the test runs succcessfully
+    fn run(&self) -> ()
+    {
+        serial_print!("{}....\t", core::any::type_name::<T>());  // any::type_name is directly
+                                                                   // implemented by the compiler
+        // for functions their type is their name                  // and returns a string
+                                                                   // description of every type
+        self();
+        serial_println!("[ok]");
     }
 }

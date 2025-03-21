@@ -4,7 +4,7 @@
 #[allow(dead_code)]
 
 /// refer [here](https://os.phil-opp.com/vga-text-mode/#volatile)
-use volatile::Volatile;
+use volatile::Volatile; // helps avoid optimizations by the compiler .. since they could break the code
 
 // gotta make some colors .. the bright bit combines with the normal bits to form the bright colors
 // in the VGA buffer 
@@ -237,4 +237,37 @@ pub fn _print(args: fmt::Arguments)
 {
     use core::fmt::Write;
     WRITER.lock().write_fmt(args).unwrap(); 
+}
+
+
+/// test to print single line output
+#[test_case]
+fn test_println_simple()
+{
+    println!("test_println_simple output");
+}
+
+
+/// test to print multi-line output
+#[test_case]
+fn test_println_many()
+{
+    for _ in 0..200
+    {
+        println!("test_println_many output");
+    }
+}
+
+
+#[test_case]
+fn test_println_output()
+{
+    let s = "Some test string that fits on a single line";
+    println!("{}", s);
+    for (i,c) in s.chars().enumerate()
+    {
+        let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT-2][i].read();
+        // refer the entire program .. helpful for understanding
+        assert_eq!((char::from(screen_char.ascii_character)), c);
+    }
 }
