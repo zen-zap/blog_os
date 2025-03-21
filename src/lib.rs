@@ -1,0 +1,111 @@
+// the library is a separate compilation unit so we need to specify the #![no_std] again
+#![no_std]
+#![cfg_attr(test, no_main)]
+#![feature(custom_test_frameworks)]
+#![test_runner(crate::test_runner)]
+#![reexport_test_harness_main="test_main"]
+
+pub mod serial;
+pub mod vga_buffer;
+
+use core::panic::PanicInfo;
+
+/// trait for `test` functions
+pub trait Testable
+{
+    /// to run the function implementing this trait
+    fn run(&self) -> ();  // Fn() trait
+}
+
+impl<T> Testable for T
+where
+    T: Fn(),
+{
+    /// helps print the name and an [ok] message if the test runs succcessfully
+    fn run(&self) -> ()
+    {
+        serial_print!("{}....\t", core::any::type_name::<T>());  // any::type_name is directly
+                                                                   // implemented by the compiler
+        // for functions their type is their name                  // and returns a string
+                                                                   // description of every type
+        self();
+        serial_println!("[ok]");
+    }
+}
+
+
+// #[cfg(test)] not added so that it is available to all executables and itegration tests -- it is
+// also public
+/// takes the tests(functions) as arguments
+/// iterates over each function
+/// - `Fn()` is a trait [functions that don't take arguments and don't return anything] and dyn Fn() is a trait object
+///
+/// - we just iterate over this list of functins ... used for testing
+/// - takes a reference to slice of references to trait objects
+pub fn test_runner(tests: &[&dyn Testable])
+{
+    serial_println!("Running {} tests", tests.len());
+    for test in tests {
+        test.run(); // call each test function in the list
+    }
+
+    // to exit_qemu -- cargo considers all error codes other than 0 as Failures
+    exit_qemu(QemuExitCode::Success);
+}
+
+
+/// our panic handler in test mode -- no need to gate it here .... the actual function is gated in
+/// main.rs using #[cfg(test)]
+pub fn test_panic_handler(info: &PanicInfo) -> ! {
+
+    serial_println!("[failed] \n");
+    serial_println!("Error: {} \n", info);
+    exit_qemu(QemuExitCode::Failed);
+
+    loop{}  // enter into an infinite loop if exit_qemu() doesn't work properly
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+/// QemuExitCode:
+/// - Success: 0x10
+/// - Failure: 0x11
+///
+/// They shouldn't clash with the default exit codes of QEMU
+pub enum QemuExitCode {
+    Success = 0x10,
+    Failed = 0x11,
+}
+
+/// function to exit QEMU
+/// Takes in a QemuExitCode as its argument
+pub fn exit_qemu(exit_code: QemuExitCode)
+{
+    use x86_64::instructions::port::Port;
+
+    unsafe
+    {
+        let mut port = Port::new(0xf4); // creates a new Port at 0xf4, which is the iobase of the isa-debug-exit device
+        port.write(exit_code as u32);
+    }
+}
+
+/// Entry point for `cargo test`
+#[cfg(test)]
+#[no_mangle] // read about this a bit
+pub extern "C" fn _start() -> ! {
+    
+    #[cfg(test)]
+    test_main(); // call the re-exported test harness when testing
+
+    loop{} 
+}
+
+/// panic handler for the library in test mode
+#[cfg(test)]
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+
+    test_panic_handler(info)
+}
