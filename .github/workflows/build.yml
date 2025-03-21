@@ -1,16 +1,41 @@
 name: Running Build
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Install Rust
-      run: |
-        sudo apt update && sudo apt install -y rustc cargo
-        rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
-    - name: Build
-      run: cargo build --verbose
+      - uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-x86_64-unknown-linux-gnu
+          override: true
+          components: rust-src
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo build
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install bootimage
+        run: cargo install bootimage
+
+      - name: Build project
+        run: cargo build --verbose --target x86_64-blog_os.json
