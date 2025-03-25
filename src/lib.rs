@@ -4,9 +4,11 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main="test_main"]
+#![feature(abi_x86_interrupt)]
 
 pub mod serial;
 pub mod vga_buffer;
+pub mod interrupts;
 
 use core::panic::PanicInfo;
 
@@ -58,7 +60,7 @@ pub fn test_runner(tests: &[&dyn Testable])
 /// main.rs using #[cfg(test)]
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
 
-    serial_println!("[failed] \n");
+    serial_println!("[failed] \n"); 
     serial_println!("Error: {} \n", info);
     exit_qemu(QemuExitCode::Failed);
 
@@ -95,6 +97,9 @@ pub fn exit_qemu(exit_code: QemuExitCode)
 #[cfg(test)]
 #[no_mangle] // read about this a bit
 pub extern "C" fn _start() -> ! {
+
+    init(); // for the breakpoint checking -- completely separate from main.rs ... gotta make a new
+            // IDT for testing too uk .. 
     
     #[cfg(test)]
     test_main(); // call the re-exported test harness when testing
@@ -108,4 +113,11 @@ pub extern "C" fn _start() -> ! {
 fn panic(info: &PanicInfo) -> ! {
 
     test_panic_handler(info)
+}
+
+
+/// to initialize the IDT for exception handling
+pub fn init()
+{
+    interrupts::init_idt();
 }

@@ -17,10 +17,20 @@ use blog_os::println;
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
 
-    println!("Hello World{}", "!"); 
+    println!("Hello World{}", "!");
+
+
+    blog_os::init(); // for exception things
+    
+    // invoke a breakpoint exception
+    x86_64::instructions::interrupts::int3(); // this is a breakpoint exception .. int3 is the asm
+
+    
 
     #[cfg(test)]
     test_main();
+
+    println!("It did not crash!");
 
     loop{}
 }
