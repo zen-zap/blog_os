@@ -26,10 +26,17 @@ pub extern "C" fn _start() -> ! {
     x86_64::instructions::interrupts::int3(); // this is a breakpoint exception .. int3 is the asm
 
     // triggerring a page fault -- to demonstrate a double fault
-    unsafe {
-        *(0xdeadbeef as *mut u8) = 42;
-    };
+    // unsafe {
+    //     *(0xdeadbeef as *mut u8) = 42;
+    // };
     
+    fn stack_overflow()
+    {
+        stack_overflow();
+    }
+
+    //trigger a stack_overflow
+    stack_overflow();
 
     #[cfg(test)]
     test_main();

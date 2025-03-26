@@ -16,6 +16,7 @@ lazy_static!  // this thing does use some unsafe code but that is abstracted for
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.breakpoint.set_handler_fn(breakpoint_handler);
+        idt.double_fault.set_handler_fn(double_fault_handler);
         idt  // this block returns the IDT
     };
 }
@@ -31,6 +32,17 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame)
 {
     println!("EXCEPTION: BREAKPOINT\n {:#?}", stack_frame);
 }
+
+
+extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame, _error_code: u64) -> !
+{
+    // diverging function x86-interrupt doesn't permit returning from a double_fault
+    // error code for the double fault is always 0 -- so no need to print it ...
+    // display the exception stack frame
+    panic!("EXCEPTION: DOUBLE_FAULT\n=== EXCEPTION_STACK_FRAME === \n{:#?}", stack_frame);
+}
+
+
 
 #[test_case]  // doing cargo test naturally runs all these tests .. 
 fn test_breakpoint_exception()
