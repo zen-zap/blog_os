@@ -35,7 +35,7 @@ pub extern "C" fn _start() -> ! {
         stack_overflow();
     }
 
-    //trigger a stack_overflow
+    // trigger a stack_overflow
     stack_overflow();
 
     #[cfg(test)]
