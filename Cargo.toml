@@ -24,3 +24,7 @@ test-timeout = 200 # (in seconds)  -- timeout for each test executable .. if exc
 [[test]]
 name = "should_panic"
 harness = true # defines whether we should use a test runner for our integration tests .. name specified obv
+
+[[test]]
+name = "stack_overflow"
+harness = false  # this means that the test is treated like a normal executable

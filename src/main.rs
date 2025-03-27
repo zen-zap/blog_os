@@ -29,6 +29,8 @@ pub extern "C" fn _start() -> ! {
     // unsafe {
     //     *(0xdeadbeef as *mut u8) = 42;
     // };
+    //
+    println!("Handled the breakpoint_exception! .. caused by int3 instruction");
     
     fn stack_overflow()
     {
@@ -37,6 +39,8 @@ pub extern "C" fn _start() -> ! {
 
     // trigger a stack_overflow
     stack_overflow();
+
+    println!("Handled the double_fault!");
 
     #[cfg(test)]
     test_main();
