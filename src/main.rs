@@ -31,7 +31,8 @@ pub extern "C" fn _start() -> ! {
     // };
     //
     println!("Handled the breakpoint_exception! .. caused by int3 instruction");
-    
+   
+    #[allow(unconditional_recursion)]
     fn stack_overflow()
     {
         stack_overflow();
