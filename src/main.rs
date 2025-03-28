@@ -23,14 +23,14 @@ pub extern "C" fn _start() -> ! {
     blog_os::init(); // for exception things
     
     // invoke a breakpoint exception
-    x86_64::instructions::interrupts::int3(); // this is a breakpoint exception .. int3 is the asm
+    // x86_64::instructions::interrupts::int3(); // this is a breakpoint exception .. int3 is the asm
 
     // triggerring a page fault -- to demonstrate a double fault
     // unsafe {
     //     *(0xdeadbeef as *mut u8) = 42;
     // };
     //
-    println!("Handled the breakpoint_exception! .. caused by int3 instruction");
+    // println!("Handled the breakpoint_exception! .. caused by int3 instruction");
    
     #[allow(unconditional_recursion)]
     fn stack_overflow()
@@ -39,9 +39,9 @@ pub extern "C" fn _start() -> ! {
     }
 
     // trigger a stack_overflow
-    stack_overflow();
+    // stack_overflow();
 
-    println!("Handled the double_fault!");
+    // println!("Handled the double_fault!");
 
     #[cfg(test)]
     test_main();

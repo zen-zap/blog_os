@@ -126,4 +126,9 @@ pub fn init()
     unsafe {
         interrupts::PICS.lock().initialize(); 
     }
+
+    x86_64::instructions::interrupts::enable(); // to enable the interrupts
+    // executes the "sti" instruction called Set interrupts to enable external interrupts!
+    // there is also our default hardware timer Intel 8253 .. we gotta be careful .. simply enablign this
+    // results in a double fault
 }

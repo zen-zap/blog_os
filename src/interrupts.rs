@@ -2,7 +2,7 @@
 
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 // you can check their docs for detailed stuff
-use crate::println;
+use crate::{println, print};
 use crate::gdt;
 
 
@@ -15,6 +15,7 @@ use lazy_static::lazy_static;
 
 lazy_static!  // this thing does use some unsafe code but that is abstracted for a safe interface
 {
+    /// The InterruptDescriptorTable struct implements the IndexMut trait, so we can access individual entries through array indexing syntax.
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.breakpoint.set_handler_fn(breakpoint_handler);
@@ -26,6 +27,11 @@ lazy_static!  // this thing does use some unsafe code but that is abstracted for
             // this was placed inside unsafe since the caller must ensure that the used index is
             // valid and not used for another exception
         }
+
+        // setup the timer interrupt handler for the timer to work .. you know clock cycles and
+        // stuff like that 
+        // CPU reacts identically to exceptions and external interrupts (the only difference is that some exceptions push an error code)
+        idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
 
         idt
     };
@@ -52,12 +58,6 @@ extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame,
     // panic!("EXCEPTION: DOUBLE_FAULT\n=== EXCEPTION_STACK_FRAME ===\n{:#?}", stack_frame);
     println!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 
-    println!("Getting out of this block .. check double_fault_handler in src/interrupts.rs");
-
-    println!("Normally handling a double fault should not allow further execution but just for showing ...\n\n
-
-        Nah this won't work .. the idt.double_fault..set_handler_fn(double_fault_handler) expects a diverging handler! ");
-
     loop{}
 }
 
@@ -80,3 +80,35 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;      // handles IRQs 8-15
 // normally this overlaps with the CPU exceptions from 0-31 .. hence PICs are remapped starting from 32
 
 pub static PICS: spin::Mutex<ChainedPics> = spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) }); // unsafe since we're setting offsets
+                                                                                                                       //
+                                                                                                                       //
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum InterruptIndex {
+    Timer = PIC_1_OFFSET,
+}
+
+impl InterruptIndex
+{
+    fn as_u8(self) -> u8
+    {
+        self as u8
+    }
+
+    fn as_usize(self) -> usize 
+    {
+        usize::from(self.as_u8())
+    }
+}
+
+extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame)
+{
+    // print!("Inside the timer_interrupt_handler!");
+    print!(" .itr. ");
+
+    // You also gotta setup an end of interrupt function .. since the PIC expects an explicit EOI
+    unsafe {
+        PICS.lock()
+            .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    }
+}
