@@ -109,6 +109,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     // print!("Inside the timer_interrupt_handler!");
     // print!(" .itr. ");
 
+    print!(".");
     // You also gotta setup an end of interrupt function .. since the PIC expects an explicit EOI
     unsafe {
         PICS.lock()
@@ -118,25 +119,42 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame)
 {
-    // print!("some key was presses just now -- key press indicator -- reading the scancode now --
-    // reacts to key press and release separately .... so 2 scancodes are printed per single key
-    // press");
-
+    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use spin::Mutex;
     use x86_64::instructions::port::Port;
+    use lazy_static::lazy_static;
 
+    lazy_static!{
+        /// defines a KEYBOARD from the pc_keyboard crate. <br>
+        /// type: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> <br>
+        /// refer [this](https://wiki.osdev.org/PS/2_Keyboard#Commands) for more details <br>
+        ///
+        ///
+        /// Also check out the docs
+        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = 
+            Mutex::new(Keyboard::new(ScancodeSet1::new(), layouts::Us104Key, HandleControl::Ignore));
+    }
+
+    /// Acquires a KEYBOARD lock
+    let mut keyboard = KEYBOARD.lock();
     let mut port = Port::new(0x60);
-    let scancode: u8 = unsafe {  // represents key press/release
-        port.read()
-    };
 
-    // print!(" key pressed scancode ==> {}\n", scancode);
+    let scancode: u8 = unsafe { port.read() };
 
-    use crate::scanc;
+    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
 
-    let key = scanc::get_key(scancode);
-
-    if let Some(key) = key {
-        print!("{}", key);
+        if let Some(key) = keyboard.process_keyevent(key_event) {
+            match key {
+                DecodedKey::Unicode(character) => print!("{}", character),
+                DecodedKey::RawKey(_key) =>
+                {
+                    // This thing prints if the CapsLock and Shift Key is pressed .. so let's leave
+                    // it at that ... gotta atleast look a little pretty
+                    // print!("{:?}", key);
+                    // pass
+                },
+            }
+        }
     }
 
     unsafe {

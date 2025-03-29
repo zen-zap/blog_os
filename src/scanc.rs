@@ -1,3 +1,5 @@
+
+#[allow(dead_code)]
 pub(crate) fn get_key(scancode: u8) -> Option<&'static str> {
     match scancode {
         0x02 => Some("1"),
