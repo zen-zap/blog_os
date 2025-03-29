@@ -33,6 +33,8 @@ lazy_static!  // this thing does use some unsafe code but that is abstracted for
         // CPU reacts identically to exceptions and external interrupts (the only difference is that some exceptions push an error code)
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
 
+        idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
+
         idt
     };
 }
@@ -86,6 +88,7 @@ pub static PICS: spin::Mutex<ChainedPics> = spin::Mutex::new(unsafe { ChainedPic
 #[repr(u8)]
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
+    Keyboard, // defaults to the pervious value + 1 = 33 .. so interrupt 33
 }
 
 impl InterruptIndex
@@ -104,11 +107,32 @@ impl InterruptIndex
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame)
 {
     // print!("Inside the timer_interrupt_handler!");
-    print!(" .itr. ");
+    // print!(" .itr. ");
 
     // You also gotta setup an end of interrupt function .. since the PIC expects an explicit EOI
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    }
+}
+
+extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame)
+{
+    // print!("some key was presses just now -- key press indicator -- reading the scancode now --
+    // reacts to key press and release separately .... so 2 scancodes are printed per single key
+    // press");
+
+    use x86_64::instructions::port::Port;
+
+    let mut port = Port::new(0x60);
+    let scancode: u8 = unsafe {  // represents key press/release
+        port.read()
+    };
+
+    print!(" key pressed scancode ==> {}\n", scancode);
+
+    unsafe {
+        PICS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8()); // motify the end of
+                                                                               // this interrupt
     }
 }
