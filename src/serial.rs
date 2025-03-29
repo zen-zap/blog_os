@@ -18,8 +18,14 @@ lazy_static! // init method called exactly once on its first use
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
     use core::fmt::Write;
+    use x86_64::instructions::interrupts;
 
-    SERIAL1.lock().write_fmt(args).expect("Printing to Serial failed!");
+    interrupts::without_interrupts(|| {
+        SERIAL1.lock().write_fmt(args).expect("Printing to Serial failed!");
+    });
+
+    // disbaling interrupts shouldn't be the general solution .. it increases the worst-case
+    // interrupt latency 
 }
 
 // using macro_export makes it live directly under the crate root .. so crate::serial::serial_println will not work

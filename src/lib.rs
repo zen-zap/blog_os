@@ -65,7 +65,9 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
     serial_println!("Error: {} \n", info);
     exit_qemu(QemuExitCode::Failed);
 
-    loop{}  // enter into an infinite loop if exit_qemu() doesn't work properly
+    serial_println!("QemuExitCode::Failed didn't work");
+
+    hlt_loop();
 }
 
 
@@ -105,7 +107,7 @@ pub extern "C" fn _start() -> ! {
     #[cfg(test)]
     test_main(); // call the re-exported test harness when testing
 
-    loop{} 
+    hlt_loop(); 
 }
 
 /// panic handler for the library in test mode
@@ -131,4 +133,14 @@ pub fn init()
     // executes the "sti" instruction called Set interrupts to enable external interrupts!
     // there is also our default hardware timer Intel 8253 .. we gotta be careful .. simply enablign this
     // results in a double fault
+}
+
+
+/// thin wrapper around hlt instruction
+pub fn hlt_loop() -> ! {
+
+    loop {
+
+        x86_64::instructions::hlt();
+    }
 }

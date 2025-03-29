@@ -231,12 +231,19 @@ macro_rules! println {
 // $crate helps us expand to the current crate's root path
 
 
-#[doc(hidden)] // hidden since it's an internal thingy
-               // hide it from the generated documentation
+/// Prints the given formatted string to the VGA text buffer
+/// through the global `WRITER` instance 
+#[doc(hidden)] 
 pub fn _print(args: fmt::Arguments)
 {
     use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap(); 
+    use x86_64::instructions::interrupts;
+
+    interrupts::without_interrupts(|| {
+        // thing now gets executed in an interrupt free environment
+        WRITER.lock().write_fmt(args).unwrap();
+        // to ensure that no interrupt can occur as long as the Mutex is locked to avoid deadlocks
+    });
 }
 
 
@@ -263,11 +270,17 @@ fn test_println_many()
 fn test_println_output()
 {
     let s = "Some test string that fits on a single line";
-    println!("{}", s);
-    for (i,c) in s.chars().enumerate()
-    {
-        let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT-2][i].read();
-        // refer the entire program .. helpful for understanding
-        assert_eq!((char::from(screen_char.ascii_character)), c);
-    }
+
+    use x86_64::instructions::interrupts;
+    use core::fmt::Write;
+
+    interrupts::without_interrupts(|| {
+        let mut writer = WRITER.lock();
+        writeln!(writer, "\n{}", s).expect("writeln failed"); // writeln! allows printing to an
+                                                              // already locked macro
+        for (i, c) in s.chars().enumerate() {
+            let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
+            assert_eq!(char::from(screen_char.ascii_character), c);
+        }
+    });
 }
