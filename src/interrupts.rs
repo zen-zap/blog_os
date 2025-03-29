@@ -129,7 +129,15 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
         port.read()
     };
 
-    print!(" key pressed scancode ==> {}\n", scancode);
+    // print!(" key pressed scancode ==> {}\n", scancode);
+
+    use crate::scanc;
+
+    let key = scanc::get_key(scancode);
+
+    if let Some(key) = key {
+        print!("{}", key);
+    }
 
     unsafe {
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8()); // motify the end of
