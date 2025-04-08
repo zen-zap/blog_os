@@ -35,6 +35,8 @@ lazy_static!  // this thing does use some unsafe code but that is abstracted for
 
         idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
 
+        idt.page_fault.set_handler_fn(page_fault_handler);
+
         idt
     };
 }
@@ -135,7 +137,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
             Mutex::new(Keyboard::new(ScancodeSet1::new(), layouts::Us104Key, HandleControl::Ignore));
     }
 
-    /// Acquires a KEYBOARD lock
+    // Acquires a KEYBOARD lock
     let mut keyboard = KEYBOARD.lock();
     let mut port = Port::new(0x60);
 
@@ -161,4 +163,25 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8()); // motify the end of
                                                                                // this interrupt
     }
+}
+
+
+use x86_64::structures::idt::PageFaultErrorCode;
+use crate::hlt_loop;
+
+/// function to handle page_faults
+///
+/// takes in the interrupt stack frame and the error code for page faults
+extern "x86-interrupt" fn page_fault_handler(stack_frame: InterruptStackFrame, error_code: PageFaultErrorCode)
+{
+    use x86_64::registers::control::Cr2;
+
+    println!("EXCEPTION: PAGE FAULT");
+    // the cr2 register contains the accessed virtual address that caused the page fault
+    println!("Accessed Address: {:?}", Cr2::read());
+    println!("Error Code: {:?}", error_code);
+    println!("{:#?}", stack_frame);
+
+    // why this? -- so that the CPU doesn't continue further execution of instructions
+    hlt_loop();
 }

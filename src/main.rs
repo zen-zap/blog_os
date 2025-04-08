@@ -26,9 +26,9 @@ pub extern "C" fn _start() -> ! {
     // x86_64::instructions::interrupts::int3(); // this is a breakpoint exception .. int3 is the asm
 
     // triggerring a page fault -- to demonstrate a double fault
-    // unsafe {
-    //     *(0xdeadbeef as *mut u8) = 42;
-    // };
+    //unsafe {
+    //    *(0xdeadbeef as *mut u8) = 42;
+    //};
     //
     // println!("Handled the breakpoint_exception! .. caused by int3 instruction");
    
@@ -37,6 +37,26 @@ pub extern "C" fn _start() -> ! {
     {
         stack_overflow();
     }
+
+    // we just used the address that the page fault handler returned
+    let ptr = 0x2047b9 as *mut u8;
+
+    // read from a code page
+    unsafe {
+        let x = *ptr;
+    }
+    println!("read worked from address: {:?}", ptr);
+
+    // write to a code page
+    //unsafe {
+    //    *ptr = 42; // try to store 42 at that address?
+    //}
+    //println!("write worked");
+
+    use x86_64::registers::control::Cr3;
+
+    let (level_4_page_table, _) = Cr3::read();
+    println!("level 4 page table: {:?}", level_4_page_table.start_address());
 
     // trigger a stack_overflow
     // stack_overflow();

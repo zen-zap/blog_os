@@ -1,4 +1,4 @@
-/// helper module to interact with the VGA buffer. Unsafe is abstracted here.
+// helper module to interact with the VGA buffer. Unsafe is abstracted here.
 // src/vga_buffer.rs
 
 #[allow(dead_code)]
