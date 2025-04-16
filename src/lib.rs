@@ -1,4 +1,5 @@
 // the library is a separate compilation unit so we need to specify the #![no_std] again
+#![allow(unused, dead_code)]
 #![no_std]
 #![cfg_attr(test, no_main)]
 #![feature(custom_test_frameworks)]

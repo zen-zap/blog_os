@@ -111,7 +111,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     // print!("Inside the timer_interrupt_handler!");
     // print!(" .itr. ");
 
-    print!(".");
+    // print!(".");
     // You also gotta setup an end of interrupt function .. since the PIC expects an explicit EOI
     unsafe {
         PICS.lock()
