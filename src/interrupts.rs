@@ -169,7 +169,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
 use x86_64::structures::idt::PageFaultErrorCode;
 use crate::hlt_loop;
 
-/// function to handle page_faults
+/// function to handle page_faults - interrupt 14?
 ///
 /// takes in the interrupt stack frame and the error code for page faults
 extern "x86-interrupt" fn page_fault_handler(stack_frame: InterruptStackFrame, error_code: PageFaultErrorCode)

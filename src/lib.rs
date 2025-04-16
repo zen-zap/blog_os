@@ -6,6 +6,7 @@
 #![reexport_test_harness_main="test_main"]
 #![feature(abi_x86_interrupt)]
 
+pub mod memory;
 pub mod serial;
 pub mod vga_buffer;
 pub mod interrupts;
@@ -97,19 +98,33 @@ pub fn exit_qemu(exit_code: QemuExitCode)
     }
 }
 
-/// Entry point for `cargo test`
+use bootloader::{BootInfo, entry_point};
+
 #[cfg(test)]
-#[no_mangle] // read about this a bit
-pub extern "C" fn _start() -> ! {
+entry_point!(test_kernel_main);
 
-    init(); // for the breakpoint checking -- completely separate from main.rs ... gotta make a new
-            // IDT for testing too uk .. 
-    
-    #[cfg(test)]
-    test_main(); // call the re-exported test harness when testing
+/// actual entry point?
+#[cfg(test)]
+fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
 
-    hlt_loop(); 
+    init(); // for breakpoints
+    test_main();
+    hlt_loop();
 }
+
+///// Entry point for `cargo test`
+//#[cfg(test)]
+//#[no_mangle] // read about this a bit
+//pub extern "C" fn _start() -> ! {
+//
+//    init(); // for the breakpoint checking -- completely separate from main.rs ... gotta make a new
+//            // IDT for testing too uk .. 
+//
+//    #[cfg(test)]
+//    test_main(); // call the re-exported test harness when testing
+//
+//    hlt_loop(); 
+//}
 
 /// panic handler for the library in test mode
 #[cfg(test)]

@@ -11,11 +11,20 @@
 
 use core::panic::PanicInfo;
 use blog_os::println;
+use bootloader::{BootInfo, entry_point};
+
+entry_point!(kernel_main); // defines the real low-level _start for us -- this thing is
+                           // type-checked so you can't really modify the signature on a whim
+
+fn kernel_main(boot_info: &'static BootInfo) -> ! {
+
+
+}
 
 
 /// Entry point of the code
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
 
     println!("Hello World{}", "!");
 
@@ -43,7 +52,7 @@ pub extern "C" fn _start() -> ! {
 
     // read from a code page
     unsafe {
-        let x = *ptr;
+        let _x = *ptr;
     }
     println!("read worked from address: {:?}", ptr);
 
@@ -55,6 +64,8 @@ pub extern "C" fn _start() -> ! {
 
     use x86_64::registers::control::Cr3;
 
+    // as we all know that CR3 holds the base level 4 page table -- btw all of the levels have
+    // names .. check them out
     let (level_4_page_table, _) = Cr3::read();
     println!("level 4 page table: {:?}", level_4_page_table.start_address());
 
