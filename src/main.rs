@@ -7,15 +7,14 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(blog_os::test_runner)] // moved to lib.rs
 
-
 use core::panic::PanicInfo;
 use blog_os::println;
 use bootloader::{BootInfo, entry_point};
-use x86_64::structures::paging::PageTable;
-use blog_os::memory::{active_level_4_table, translate_addr};
+use x86_64::structures::paging::{PageTable, Translate};
+use blog_os::memory::{self, translate_addr};
 use x86_64::VirtAddr;
 
-entry_point!(kernel_main); // defines the real low-level _start for us -- this thing is
+entry_point!(kernel_main); // defines the real low-level _start for us --- this thing is
                            // type-checked so you can't really modify the signature on a whim
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
@@ -26,10 +25,13 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
                      
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
 
-    let l4_table = unsafe {
-        active_level_4_table(phys_mem_offset)
-        // takes the offset and returns the virtual address
-    };
+    //let l4_table = unsafe {
+    //    active_level_4_table(phys_mem_offset)
+    //    // takes the offset and returns the virtual address
+    //};
+    //
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut frame_allocator = memory::EmptyFrameAllocator;
 
     //for (i, entry) in l4_table.iter().enumerate() {
     //    if !entry.is_unused() {
@@ -65,12 +67,24 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
         let virt = VirtAddr::new(address);
 
-        let phys = unsafe {
-            translate_addr(virt, phys_mem_offset)
-        };
+        let phys = mapper.translate_addr(virt);
+
+        //let phys = unsafe {
+        //    translate_addr(virt, phys_mem_offset)
+        //};
 
         println!("{:?} -> {:?}", virt, phys);
     }
+
+    // map an unused page -- mapping created at address 0
+    let page = Page::containing_address(VirtAddr::new(0));
+    memory::create_example_mapping(page, &mut mapper, &mut frame_allocator);
+
+    // write the string `New!` to the screen through the mapping
+    let page_ptr; *mut u64 = page.start_address().as_mut_ptr();
+    unsafe {
+        page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e)
+    };
 
     #[cfg(test)]
     test_main();
