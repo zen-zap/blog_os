@@ -78,14 +78,15 @@ fn test_breakpoint_exception()
 use pic8259::ChainedPics; // a pair of chained PICs .. check source in doc
 use spin;
 
+// PIC - Peripheral Interface Controller
 // the PICs are arranged in a Master-Slave Configuration
 pub const PIC_1_OFFSET: u8 = 32;                    // handles IRQs 0-7
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;      // handles IRQs 8-15
 // normally this overlaps with the CPU exceptions from 0-31 .. hence PICs are remapped starting from 32
 
 pub static PICS: spin::Mutex<ChainedPics> = spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) }); // unsafe since we're setting offsets
-                                                                                                                       //
-                                                                                                                       //
+                                                                                                                       
+                                                                                                                       
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
@@ -160,8 +161,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     }
 
     unsafe {
-        PICS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8()); // motify the end of
-                                                                               // this interrupt
+        PICS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8()); // notify the end of this interrupt
     }
 }
 

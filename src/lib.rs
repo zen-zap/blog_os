@@ -4,41 +4,41 @@
 #![cfg_attr(test, no_main)]
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
-#![reexport_test_harness_main="test_main"]
+#![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
 
+pub mod allocator;
+pub mod gdt;
+pub mod interrupts;
 pub mod memory;
+pub mod scanc;
 pub mod serial;
 pub mod vga_buffer;
-pub mod interrupts;
-pub mod gdt;
-pub mod scanc;
+
+extern crate alloc;
 
 use core::panic::PanicInfo;
 
 /// trait for `test` functions
-pub trait Testable
-{
-    /// to run the function implementing this trait
-    fn run(&self) -> ();  // Fn() trait
+pub trait Testable {
+	/// to run the function implementing this trait
+	fn run(&self) -> (); // Fn() trait
 }
 
 impl<T> Testable for T
 where
-    T: Fn(),
+	T: Fn(),
 {
-    /// helps print the name and an [ok] message if the test runs succcessfully
-    fn run(&self) -> ()
-    {
-        serial_print!("{}....\t", core::any::type_name::<T>());  // any::type_name is directly
-                                                                   // implemented by the compiler
-        // for functions their type is their name                  // and returns a string
-                                                                   // description of every type
-        self();
-        serial_println!("[ok]");
-    }
+	/// helps print the name and an [ok] message if the test runs succcessfully
+	fn run(&self) -> () {
+		serial_print!("{}....\t", core::any::type_name::<T>()); // any::type_name is directly
+		// implemented by the compiler
+		// for functions their type is their name                  // and returns a string
+		// description of every type
+		self();
+		serial_println!("[ok]");
+	}
 }
-
 
 // #[cfg(test)] not added so that it is available to all executables and itegration tests -- it is
 // also public
@@ -48,31 +48,27 @@ where
 ///
 /// - we just iterate over this list of functins ... used for testing
 /// - takes a reference to slice of references to trait objects
-pub fn test_runner(tests: &[&dyn Testable])
-{
-    serial_println!("Running {} tests", tests.len());
-    for test in tests {
-        test.run(); // call each test function in the list
-    }
+pub fn test_runner(tests: &[&dyn Testable]) {
+	serial_println!("Running {} tests", tests.len());
+	for test in tests {
+		test.run(); // call each test function in the list
+	}
 
-    // to exit_qemu -- cargo considers all error codes other than 0 as Failures
-    exit_qemu(QemuExitCode::Success);
+	// to exit_qemu -- cargo considers all error codes other than 0 as Failures
+	exit_qemu(QemuExitCode::Success);
 }
-
 
 /// our panic handler in test mode -- no need to gate it here .... the actual function is gated in
 /// main.rs using #[cfg(test)]
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
+	serial_println!("[failed] \n");
+	serial_println!("Error: {} \n", info);
+	exit_qemu(QemuExitCode::Failed);
 
-    serial_println!("[failed] \n"); 
-    serial_println!("Error: {} \n", info);
-    exit_qemu(QemuExitCode::Failed);
+	serial_println!("QemuExitCode::Failed didn't work");
 
-    serial_println!("QemuExitCode::Failed didn't work");
-
-    hlt_loop();
+	hlt_loop();
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -82,21 +78,19 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
 ///
 /// They shouldn't clash with the default exit codes of QEMU
 pub enum QemuExitCode {
-    Success = 0x10,
-    Failed = 0x11,
+	Success = 0x10,
+	Failed = 0x11,
 }
 
 /// function to exit QEMU
 /// Takes in a QemuExitCode as its argument
-pub fn exit_qemu(exit_code: QemuExitCode)
-{
-    use x86_64::instructions::port::Port;
+pub fn exit_qemu(exit_code: QemuExitCode) {
+	use x86_64::instructions::port::Port;
 
-    unsafe
-    {
-        let mut port = Port::new(0xf4); // creates a new Port at 0xf4, which is the iobase of the isa-debug-exit device
-        port.write(exit_code as u32);
-    }
+	unsafe {
+		let mut port = Port::new(0xf4); // creates a new Port at 0xf4, which is the iobase of the isa-debug-exit device
+		port.write(exit_code as u32);
+	}
 }
 
 use bootloader::{BootInfo, entry_point};
@@ -107,10 +101,9 @@ entry_point!(test_kernel_main);
 /// actual entry point?
 #[cfg(test)]
 fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
-
-    init(); // for breakpoints
-    test_main();
-    hlt_loop();
+	init(); // for breakpoints
+	test_main();
+	hlt_loop();
 }
 
 ///// Entry point for `cargo test`
@@ -119,45 +112,39 @@ fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
 //pub extern "C" fn _start() -> ! {
 //
 //    init(); // for the breakpoint checking -- completely separate from main.rs ... gotta make a new
-//            // IDT for testing too uk .. 
+//            // IDT for testing too uk ..
 //
 //    #[cfg(test)]
 //    test_main(); // call the re-exported test harness when testing
 //
-//    hlt_loop(); 
+//    hlt_loop();
 //}
 
 /// panic handler for the library in test mode
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-
-    test_panic_handler(info)
+	test_panic_handler(info)
 }
-
 
 /// to initialize the IDT for exception handling
-pub fn init()
-{
-    gdt::init();
-    interrupts::init_idt();
+pub fn init() {
+	gdt::init();
+	interrupts::init_idt();
 
-    unsafe {
-        interrupts::PICS.lock().initialize(); 
-    }
+	unsafe {
+		interrupts::PICS.lock().initialize();
+	}
 
-    x86_64::instructions::interrupts::enable(); // to enable the interrupts
-    // executes the "sti" instruction called Set interrupts to enable external interrupts!
-    // there is also our default hardware timer Intel 8253 .. we gotta be careful .. simply enablign this
-    // results in a double fault
+	x86_64::instructions::interrupts::enable(); // to enable the interrupts
+	// executes the "sti" instruction called Set interrupts to enable external interrupts!
+	// there is also our default hardware timer Intel 8253 .. we gotta be careful .. simply enablign this
+	// results in a double fault
 }
-
 
 /// thin wrapper around hlt instruction
 pub fn hlt_loop() -> ! {
-
-    loop {
-
-        x86_64::instructions::hlt();
-    }
+	loop {
+		x86_64::instructions::hlt();
+	}
 }
