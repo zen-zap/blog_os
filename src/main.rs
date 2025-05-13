@@ -19,7 +19,6 @@ use alloc::{boxed::Box, vec, vec::Vec, rc::Rc};
 
 extern crate alloc;
 
-
 entry_point!(kernel_main); // defines the real low-level _start for us --- this thing is
 // type-checked so you can't really modify the signature on a whim
 
@@ -128,7 +127,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 //    // invoke a breakpoint exception
 //    // x86_64::instructions::interrupts::int3(); // this is a breakpoint exception .. int3 is the asm
 //
-//    // triggerring a page fault -- to demonstrate a double fault
+//    // triggering a page fault -- to demonstrate a double fault
 //    //unsafe {
 //    //    *(0xdeadbeef as *mut u8) = 42;
 //    //};
@@ -194,6 +193,6 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 #[test_case]
-fn trivial_assertion() {
+fn one_one_assertion() {
 	assert_eq!(1, 1);
 }
