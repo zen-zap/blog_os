@@ -9,13 +9,13 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(blog_os::test_runner)] // moved to lib.rs
 
-use blog_os::memory::{self, translate_addr, BootInfoFrameAllocator};
-use blog_os::{println, allocator};
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use blog_os::memory::{self, BootInfoFrameAllocator, translate_addr};
+use blog_os::{allocator, println};
 use bootloader::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::{Page, PageTable, Translate};
-use alloc::{boxed::Box, vec, vec::Vec, rc::Rc};
 
 extern crate alloc;
 
@@ -23,7 +23,6 @@ entry_point!(kernel_main); // defines the real low-level _start for us --- this 
 // type-checked so you can't really modify the signature on a whim
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-
 	println!("Hello zen-zap{}", "!");
 	blog_os::init(); // for the exception things
 
@@ -88,25 +87,24 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	//let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
 	//unsafe { page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e) };
 
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed!");
+	allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed!");
 
-    let heap_value = Box::new(41);
-    println!("heap value at {:p}", heap_value);
+	let heap_value = Box::new(41);
+	println!("heap value at {:p}", heap_value);
 
-    let mut vec = Vec::new(); // dynamic size
-    for i in 0..500 {
-        vec.push(i);
-    }        
+	let mut vec = Vec::new(); // dynamic size
+	for i in 0..500 {
+		vec.push(i);
+	}
 
-    println!("vec at {:p}", vec.as_slice());
+	println!("vec at {:p}", vec.as_slice());
 
-    // reference counted vector
-    let reference_counted = Rc::new(vec![1, 2, 3]);
-    let cloned_reference = reference_counted.clone();
-    println!("current reference count is {}", Rc::strong_count(&cloned_reference));
-    core::mem::drop(reference_counted);
-    println!("reference count is {} now", Rc::strong_count(&cloned_reference));
-
+	// reference counted vector
+	let reference_counted = Rc::new(vec![1, 2, 3]);
+	let cloned_reference = reference_counted.clone();
+	println!("current reference count is {}", Rc::strong_count(&cloned_reference));
+	core::mem::drop(reference_counted);
+	println!("reference count is {} now", Rc::strong_count(&cloned_reference));
 
 	#[cfg(test)]
 	test_main();
