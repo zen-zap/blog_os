@@ -194,3 +194,6 @@ unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
 
 // Okay so, we did reuse the freed memory here, but the heap memory is still fragmented,
 // we do not merge the freed memory for a very large allocation.
+
+// The actual linked list allocator does merge them by keeping the list in sorted order of their
+// start addresses ....

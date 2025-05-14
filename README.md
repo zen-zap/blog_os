@@ -1,5 +1,5 @@
-# Phillip Oppermann's blog
+# Hey!
 
-Hey, so I wanted to try my hand at making an OS by myself .... so I started following [this](https://os.phil-opp.com/) blog.
+This is my repo for learning OS fundamentals and how to write one in Rust.
 
-
+Currently working on: **Allocators**
