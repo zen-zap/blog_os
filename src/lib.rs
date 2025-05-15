@@ -13,6 +13,7 @@ pub mod interrupts;
 pub mod memory;
 pub mod scanc;
 pub mod serial;
+pub mod task;
 pub mod vga_buffer;
 
 extern crate alloc;
@@ -138,8 +139,8 @@ pub fn init() {
 
 	x86_64::instructions::interrupts::enable(); // to enable the interrupts
 	// executes the "sti" instruction called Set interrupts to enable external interrupts!
-	// there is also our default hardware timer Intel 8253 .. we gotta be careful .. simply enablign this
-	// results in a double fault
+	// there is also our default hardware timer Intel 8253 .. we have to be careful .. simply
+	// enabling this results in a double fault
 }
 
 /// thin wrapper around hlt instruction
