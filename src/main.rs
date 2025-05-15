@@ -11,6 +11,7 @@
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use blog_os::memory::{self, BootInfoFrameAllocator, translate_addr};
+use blog_os::task::{Task, simple_executor::SimpleExecutor};
 use blog_os::{allocator, println};
 use bootloader::{BootInfo, entry_point};
 use core::panic::PanicInfo;
@@ -89,22 +90,27 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
 	allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed!");
 
-	let heap_value = Box::new(41);
-	println!("heap value at {:p}", heap_value);
+	// let heap_value = Box::new(41);
+	// println!("heap value at {:p}", heap_value);
+	//
+	// let mut vec = Vec::new(); // dynamic size
+	// for i in 0..500 {
+	// 	vec.push(i);
+	// }
+	//
+	// println!("vec at {:p}", vec.as_slice());
+	//
+	// // reference counted vector
+	// let reference_counted = Rc::new(vec![1, 2, 3]);
+	// let cloned_reference = reference_counted.clone();
+	// println!("current reference count is {}", Rc::strong_count(&cloned_reference));
+	// core::mem::drop(reference_counted);
+	// println!("reference count is {} now", Rc::strong_count(&cloned_reference));
 
-	let mut vec = Vec::new(); // dynamic size
-	for i in 0..500 {
-		vec.push(i);
-	}
+	let mut executor = SimpleExecutor::new();
 
-	println!("vec at {:p}", vec.as_slice());
-
-	// reference counted vector
-	let reference_counted = Rc::new(vec![1, 2, 3]);
-	let cloned_reference = reference_counted.clone();
-	println!("current reference count is {}", Rc::strong_count(&cloned_reference));
-	core::mem::drop(reference_counted);
-	println!("reference count is {} now", Rc::strong_count(&cloned_reference));
+	executor.spawn(Task::new(example_task()));
+	executor.run();
 
 	#[cfg(test)]
 	test_main();
@@ -194,3 +200,17 @@ fn panic(info: &PanicInfo) -> ! {
 fn one_one_assertion() {
 	assert_eq!(1, 1);
 }
+
+/// Returns 69
+async fn async_number() -> u32 {
+	69
+}
+
+/// Waits on async_number() as prints the result
+async fn example_task() {
+	let number = async_number().await;
+	println!("async number: {}", number);
+}
+
+// Now, to experience so better results than this and actually see the advantage of having a Waker,
+// let's see something new
