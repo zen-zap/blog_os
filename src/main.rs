@@ -10,12 +10,15 @@
 #![test_runner(blog_os::test_runner)] // moved to lib.rs
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use blog_os::interrupts::InterruptIndex::Keyboard;
 use blog_os::memory::{self, BootInfoFrameAllocator, translate_addr};
-use blog_os::task::{Task, simple_executor::SimpleExecutor};
+use blog_os::task::{Task, executor::Executor, keyboard, simple_executor::SimpleExecutor};
 use blog_os::{allocator, println};
 use bootloader::{BootInfo, entry_point};
+use core::arch::asm;
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
+use x86_64::registers::control::Cr2;
 use x86_64::structures::paging::{Page, PageTable, Translate};
 
 extern crate alloc;
@@ -107,9 +110,10 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	// core::mem::drop(reference_counted);
 	// println!("reference count is {} now", Rc::strong_count(&cloned_reference));
 
-	let mut executor = SimpleExecutor::new();
+	let mut executor = Executor::new();
 
 	executor.spawn(Task::new(example_task()));
+	executor.spawn(Task::new(keyboard::print_keypresses()));
 	executor.run();
 
 	#[cfg(test)]
@@ -185,8 +189,54 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	println!("{}", info);
+	println!("KERNEL PANIC: {}\n", info);
 
+	// reading RIP [current instruction pointer]
+	let rip: u64;
+	unsafe {
+		asm!(
+			"lea {rip}, [rip]", // load the effective address of the next instruction
+			rip = out(reg) rip,
+			options(nomem, nostack, preserves_flags),
+		);
+	}
+
+	println!("RIP: {:#018x}", rip);
+
+	// stack backtrace
+	println!("\nStack Backtrace:");
+	let mut rbp: u64;
+	unsafe {
+		asm!(
+			"mov {rbp}, rbp",
+			rbp = out(reg) rbp,
+			options(nomem, preserves_flags),
+		)
+	}
+
+	let mut stack_trace_count = 0;
+
+	while rbp != 0 && stack_trace_count < 20 {
+		// return address is saved at [RBP + 8]
+		let ret = unsafe { *((rbp + 8) as *const u64) };
+		println!("  {:#018x}", ret);
+		// the previous frame's RBP is at [RBP]
+		rbp = unsafe { *(rbp as *const u64) };
+
+		stack_trace_count += 1;
+	}
+
+	// let rsp: u64;
+	// unsafe {
+	// 	asm!(
+	// 		"mov {rsp}, rsp",
+	// 		rsp = out(reg) rsp,
+	// 		options(nomem, preserves_flags),
+	// 	);
+	// }
+	// println!("RSP: {:#x}", rsp);
+
+	// halt it forever,
 	blog_os::hlt_loop();
 }
 

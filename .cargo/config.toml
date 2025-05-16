@@ -1,7 +1,13 @@
 # .cargo/config.toml
 
+[profile.dev]
+debug = true
+overflow-checks = true
+panic = "abort"
+
 [build]
 target = "x86_64-blog_os.json"
+rustflags = ["-C", "force-frame-pointers=yes"]
 
 [unstable]
 build-std-features = ["compiler-builtins-mem"]

@@ -26,7 +26,7 @@ impl SimpleExecutor {
 			let waker = dummy_waker();
 			let mut context = Context::from_waker(&waker);
 			match task.poll(&mut context) {
-				Poll::Ready(()) => {},
+				Poll::Ready(()) => {}, // task done
 				// if the task is unfinished then add it to the back of the queue again
 				Poll::Pending => self.task_queue.push_back(task),
 			}
