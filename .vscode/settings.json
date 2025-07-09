@@ -1,0 +1,41 @@
+{
+    "rust-analyzer.server.path": "rust-analyzer",
+    "rust-analyzer.cargo.target": "x86_64-blog_os.json",
+    "rust-analyzer.cargo.allTargets": false,
+    "rust-analyzer.cargo.allFeatures": false,
+    "rust-analyzer.cargo.noDefaultFeatures": false,
+    "rust-analyzer.cargo.extraArgs": [
+        "--target",
+        "x86_64-blog_os.json",
+        "-Z",
+        "build-std=core,compiler_builtins,alloc"
+    ],
+    "rust-analyzer.cargo.extraEnv": {
+        "RUSTFLAGS": "-C force-frame-pointers=yes"
+    },
+    "rust-analyzer.rustc.source": "discover",
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.cargo.buildScripts.useRustcWrapper": true,
+    "rust-analyzer.checkOnSave.enable": true,
+    "rust-analyzer.checkOnSave.command": "clippy",
+    "rust-analyzer.checkOnSave.extraArgs": [
+        "--target",
+        "x86_64-blog_os.json",
+        "-Z",
+        "build-std=core,compiler_builtins,alloc"
+    ],
+    "rust-analyzer.procMacro.enable": true,
+    "rust-analyzer.procMacro.attributes.enable": true,
+    "rust-analyzer.diagnostics.enable": true,
+    "rust-analyzer.diagnostics.experimental.enable": true,
+    "rust-analyzer.completion.addCallArgumentSnippets": true,
+    "rust-analyzer.completion.addCallParenthesis": true,
+    "rust-analyzer.inlayHints.enable": true,
+    "rust-analyzer.inlayHints.chainingHints": true,
+    "rust-analyzer.inlayHints.parameterHints": true,
+    "rust-analyzer.inlayHints.typeHints": true,
+    "rust-analyzer.trace.server": "verbose",
+    "rust-analyzer.lens.enable": true,
+    "rust-analyzer.lens.implementations.enable": true,
+    "rust-analyzer.lens.references.enable": true
+}

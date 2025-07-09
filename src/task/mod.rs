@@ -11,10 +11,19 @@ use core::{
 	task::{Context, Poll},
 };
 
+/// to let tasks have metadata like priority and maybe something like
+struct TaskMetadata {
+	/// base priority
+	priority: u8,
+	/// dynamic priority
+	dyn_priority: u8,
+}
+
 pub struct Task {
 	id: TaskId,
 	future: Pin<Box<dyn Future<Output = ()>>>,
 	// methods on the Future are dynamically dispatched
+	meta: TaskMetadata,
 }
 
 impl Task {
@@ -24,10 +33,14 @@ impl Task {
 	///
 	/// The static lifetime is required because
 	/// the Future can live for an arbitrary amount of time.
-	pub fn new(future: impl Future<Output = ()> + 'static) -> Task {
+	pub fn new(
+		priority: u8,
+		future: impl Future<Output = ()> + 'static,
+	) -> Task {
 		Task {
 			id: TaskId::new(), // makes it possible for uniquely naming a task for specific wake-ups
 			future: Box::pin(future),
+			meta: TaskMetadata { priority, dyn_priority: priority },
 		}
 	}
 

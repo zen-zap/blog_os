@@ -11,6 +11,7 @@ pub mod linked_list;
 pub const HEAP_START: usize = 0x_4444_4444_0000; // some range from virtual memory
 pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB heap size
 
+// let's try to create a Dummy allocator just to demonstrate the workings of the allocator
 pub struct Dummy;
 
 unsafe impl GlobalAlloc for Dummy {
@@ -34,9 +35,11 @@ unsafe impl GlobalAlloc for Dummy {
 	) {
 		panic!("dealloc should never be called if the allocator never returns any memory");
 	}
+
+	// alloc_zeroed and realloc are already defined by the trait
 }
 
-/// Okay so that was it for the allocator .. now you gotta tell the compiler to use this
+// Okay so that was it for the allocator .. now you gotta tell the compiler to use this
 //#[global_allocator]
 //static ALLOCATOR: Dummy = Dummy;
 
@@ -64,26 +67,38 @@ use x86_64::{
 
 /// function to initialize the heap for the allocator
 ///
+/// Here, we map a range of virtual memory to physical memory and then set up the allocator to
+/// manage it. The Heap Allocator needs a contiguous memory region to manage.
+///
+/// This function maps the virtual pages to physical frames
+///
 /// This maps the heap pages using the Mapper API from x86_64
 pub fn init_heap(
 	mapper: &mut impl Mapper<Size4KiB>,
 	frame_allocator: &mut impl FrameAllocator<Size4KiB>,
 ) -> Result<(), MapToError<Size4KiB>> {
 	let page_range = {
+		// define the start of the heap memory
 		let heap_start = VirtAddr::new(HEAP_START as u64);
+		// define the end of the heap memory spanning HEAP_SIZE
 		let heap_end = heap_start + HEAP_SIZE - 1u64;
 		let heap_start_page = Page::containing_address(heap_start);
 		let heap_end_page = Page::containing_address(heap_end);
 
+		// calculate the range of pages that the heap occupies
 		Page::range_inclusive(heap_start_page, heap_end_page)
 	};
 
+	// for each page do this
 	for page in page_range {
+		// allocate a physical frame using frame_allocator
 		let frame = frame_allocator.allocate_frame().ok_or(MapToError::FrameAllocationFailed)?;
-
+		// flags to give permissions
 		let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
 
+		// use mapper API to map the page to the frame with the flags using the allocator
 		unsafe { mapper.map_to(page, frame, flags, frame_allocator)?.flush() };
+		// the mapper is flushed to ensure that the changes are applied
 
 		// initialize the heap only after mapping the heap pages
 		unsafe {
@@ -107,7 +122,7 @@ impl<A> Locked<A> {
 	}
 
 	/// returns the lock for access
-	pub fn lock(&self) -> spin::MutexGuard<A> {
+	pub fn lock(&self) -> spin::MutexGuard<'_, A> {
 		self.inner.lock()
 	}
 }
