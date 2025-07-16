@@ -83,7 +83,7 @@ pub static PICS: spin::Mutex<ChainedPics> =
 #[repr(u8)]
 pub enum InterruptIndex {
 	Timer = PIC_1_OFFSET,
-	Keyboard, // defaults to the pervious value + 1 = 33 .. so interrupt 33
+	Keyboard, // defaults to the previous value + 1 = 33 .. so interrupt 33
 }
 
 impl InterruptIndex {
@@ -101,7 +101,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 	// print!(" .itr. ");
 
 	// print!(".");
-	// You also gotta setup an end of interrupt function .. since the PIC expects an explicit EOI
+	// You also gotta set up an end of interrupt function .. since the PIC expects an explicit EOI
 	unsafe {
 		PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
 	}
@@ -136,7 +136,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
 	// 			DecodedKey::Unicode(character) => print!("{}", character),
 	// 			DecodedKey::RawKey(_key) => {
 	// 				// This thing prints if the CapsLock and Shift Key is pressed .. so let's leave
-	// 				// it at that ... gotta at least look a little pretty
+	// 				// it at that … gotta at least look a little pretty
 	// 				// print!("{:?}", key);
 	// 				// pass
 	// 			},
