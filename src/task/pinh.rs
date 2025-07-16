@@ -21,19 +21,18 @@ pub struct Resource;
 ///
 /// It tracks the owner of the resource and the tasks waiting on it
 /// Handles priority propagation
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PriLock {
-	resource: Option<Resource>,
-	owner: Option<TaskId>,
-	waiters: Vec<TaskId>,
+	pub resource: Option<Resource>,
+	pub owner: Option<TaskId>,
+	pub waiters: Vec<TaskId>,
 }
 
 // We also need something to know which resource it is holding right? ..
 
 impl PriLock {
-	// TODO -- pass the resource here once priority inheritance is ready
-	pub fn new(owner: TaskId) -> PriLock {
-		PriLock { resource: None, owner: Some(owner), waiters: Vec::new() }
+	pub fn new() -> Self {
+		Default::default() // new lock with no owners and no waiters
 	}
 
 	pub fn set_owner(
@@ -50,7 +49,7 @@ impl PriLock {
 		self.waiters.push(waiter);
 	}
 
-	/// Method to boost the priority of the owner if there are tasks with higher priority waiting
+	/*/// Method to boost the priority of the owner if there are tasks with higher priority waiting
 	/// for the owner
 	pub fn propagate_priority(
 		&mut self,
@@ -73,39 +72,5 @@ impl PriLock {
 				}
 			}
 		}
-	}
-
-	/// try to acquire the lock of a resource that is PriLock
-	/// If the lock is not owned by anyone .. it gets owned by the passed TaskId
-	/// else the passed TaskId gets added to the waiters of the specified lock.
-	pub fn lock_acquire(
-		&mut self,
-		tasks: &mut Vec<Task>,
-		task_id: TaskId,
-	) {
-		if self.owner.is_none() {
-			self.owner = Some(task_id);
-		} else {
-			self.add_waiter(task_id);
-			self.propagate_priority(tasks, task_id);
-		}
-	}
-
-	pub fn lock_release(
-		&mut self,
-		tasks: &mut Vec<Task>,
-	) {
-		if let Some(owner_id) = self.owner {
-			let owner_task = tasks.iter_mut().find(|t| t.id == owner_id).unwrap();
-
-			owner_task.meta.dyn_priority = owner_task.meta.base_priority;
-
-			if let Some(waiter_id) = self.waiters.pop() {
-				self.owner = Some(waiter_id);
-				self.propagate_priority(tasks, waiter_id);
-			} else {
-				self.owner = None;
-			}
-		}
-	}
+	}*/
 }

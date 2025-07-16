@@ -4,6 +4,7 @@
 
 pub mod executor;
 pub mod keyboard;
+pub mod lock;
 pub mod pinh;
 pub mod simple_executor;
 
@@ -22,8 +23,8 @@ struct TaskMetadata {
 	base_priority: u8,
 	/// dynamic priority -- we can boost or decay this
 	dyn_priority: u8,
-	/// list of Locks held by the current task -- this is gonna help in dependency tracking
-	locks_held: Vec<pinh::PriLock>,
+	/// list of Lock IDs held by the current task -- this is gonna help in dependency tracking
+	locks_held: Vec<lock::LockId>,
 }
 
 /// Represents an asynchronous task to be executed by the executor.
@@ -83,7 +84,7 @@ impl Task {
 	}
 }
 
-/// simple wrapper around u64
+/// simple wrapper around u64 to hold TaskIDs
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TaskId(u64);
 
@@ -102,7 +103,6 @@ impl TaskId {
 }
 
 /*
-
 Each task in its metadata cannot hold the entire copy of the entire PriLock,
 When Task A acquires a lock and Task B wants it, then B would get its own copy of the PriLock.
 If Task B adds itself to the waiters list, its adding itself to its own private copy.

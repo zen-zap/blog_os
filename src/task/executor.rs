@@ -1,15 +1,27 @@
 //! in src/task/executor.rs
 //!
-//! The Executor is the Scheduler Core
+//! The Executor is the Scheduler's Core
 
-use super::{PriLock, Task, TaskId, TaskMetadata};
-use alloc::{collections::BTreeMap, collections::BinaryHeap, sync::Arc};
-use core::cmp::Reverse;
-use core::task::{Context, Poll, Waker};
+use crate::task::{Task, TaskId, TaskMetadata, lock::LockId, pinh::PriLock};
+use alloc::{
+	collections::{BTreeMap, BinaryHeap},
+	sync::Arc,
+	task::Wake,
+	vec::Vec,
+};
+use core::{
+	cmp::Reverse,
+	sync,
+	task::{Context, Poll, Waker},
+};
 use crossbeam_queue::ArrayQueue;
 use futures_util::task::waker;
+use spin::Mutex;
+use x86_64::instructions::hlt;
 
 /// Manages the tasks, task_queue and waker_cache
+///
+/// This will be only owner of all the PriLocks.
 ///
 /// The Executor manages all tasks and locks in the system
 /// Handles scheduling logic and priority inheritance logic
@@ -29,9 +41,8 @@ pub struct Executor {
 	locks: BTreeMap<LockId, PriLock>,
 }
 
-pub struct LockId(u8);
-
 impl Executor {
+	/// Creates a new executor
 	pub fn new() -> Self {
 		Executor {
 			tasks: BTreeMap::new(),
@@ -63,11 +74,126 @@ impl Executor {
 	/// It never returns
 	pub fn run(&mut self) -> ! {
 		loop {
-			self.run_ready_tasks();
+			if self.task_queue.lock().is_empty() {
+				self.sleep_if_idle();
+			} else {
+				self.run_ready_tasks();
+			}
 		}
 	}
 
-	/// age the tasks by 1
+	/// Creates a new Lock and returns its ID
+	pub fn create_lock(&mut self) -> LockId {
+		// make a new ID
+		let lock_id = LockId::new();
+		// properly define it: ID and Lock
+		// and store it
+		self.locks.insert(lock_id, PriLock::new());
+		lock_id
+	}
+
+	/// A task requires a lock
+	pub fn acquire_lock(
+		&mut self,
+		task_id: TaskId,
+		lock_id: LockId,
+	) {
+		let waiter_priority = self.tasks[&task_id].meta.dyn_priority;
+		// get the lock first
+		let lock = self.locks.get_mut(&lock_id).expect("Invalid LockId");
+
+		if let Some(owner_id) = lock.owner {
+			// LOCK is ALREADY HELD
+			if owner_id != task_id {
+				// check if the owner is the requester, if not then proceed
+				// the current task goes to the waiting queue of the lock
+				lock.waiters.push(task_id);
+
+				// NOTE: Implemented Priority Inheritance here
+				// We would need to compare the priority of the added task and the owner
+				// Increase owner priority if it has less
+				let lock_owner = self.tasks.get_mut(&owner_id).unwrap();
+				// get the larger priority of the 2
+				let owner_new_priority = lock_owner.meta.dyn_priority.max(waiter_priority);
+				// The owner is probably in the task_queue, since it is an owner
+				// we need to update it with the new priority
+				// just re-add it ig? the binary heap can handle duplicates
+				lock_owner.meta.dyn_priority = owner_new_priority;
+				self.task_queue.lock().push(Reverse((owner_new_priority, owner_id)));
+
+				// IMPORTANT: This waiter task is now blocked. Not added to the queue!
+				// It could be unblocked by `release_lock`
+			}
+		} else {
+			// LOCK is FREE
+			// make the requesting task the owner of the lock
+			lock.owner = Some(task_id);
+			let task = self.tasks.get_mut(&task_id).unwrap();
+			task.meta.locks_held.push(lock_id);
+
+			// The task can continue running, add it to the queue
+			let dyn_p = task.meta.dyn_priority;
+			self.task_queue.lock().push(Reverse((dyn_p, task_id)));
+		}
+	}
+
+	pub fn release_lock(
+		&mut self,
+		task_id: TaskId,
+		lock_id: LockId,
+	) {
+		// immutable borrow here
+		let lock = self.locks.get(&lock_id).unwrap();
+		if lock.owner != Some(task_id) {
+			panic!("Task {:?} tried to release a lock it doesn't own", task_id);
+		}
+
+		let releasing_task_meta = &self.tasks[&task_id].meta;
+		let mut new_priority = releasing_task_meta.base_priority;
+
+		for other_lock_id in &releasing_task_meta.locks_held {
+			// skip the lock we're releasing
+			if *other_lock_id == lock_id {
+				continue;
+			}
+
+			let other_lock = &self.locks[other_lock_id];
+
+			if let Some(highest_waiter_id) = other_lock
+				.waiters
+				.iter()
+				.max_by_key(|waiter_id| self.tasks[waiter_id].meta.dyn_priority)
+			{
+				let highest_waiter_priority = self.tasks[highest_waiter_id].meta.dyn_priority;
+				if highest_waiter_priority > new_priority {
+					new_priority = highest_waiter_priority;
+				}
+			}
+		}
+
+		let releasing_task = self.tasks.get_mut(&task_id).unwrap();
+		releasing_task.meta.dyn_priority = new_priority;
+		releasing_task.meta.locks_held.retain(|x| *x != lock_id);
+
+		let lock = self.locks.get_mut(&lock_id).unwrap(); // mutable re-borrow
+		// After removing the current task, we add the new task to the task_queue
+		if let Some(waiter_id) = lock.waiters.pop() {
+			lock.owner = Some(waiter_id);
+
+			let new_owner_task = self.tasks.get_mut(&waiter_id).unwrap();
+			new_owner_task.meta.locks_held.push(lock_id);
+
+			// wake up this task by adding it to the task_queue
+			let dyn_p = new_owner_task.meta.dyn_priority;
+			// add the waiter to the queue
+			self.task_queue.lock().push(Reverse((dyn_p, waiter_id)));
+		} else {
+			// No tasks waiting on this resource lock
+			lock.owner = None;
+		}
+	}
+
+	/// bump task priorities by 1
 	/// This one prevents starvation
 	fn age_priorities(&mut self) {
 		for task in self.tasks.values_mut() {
@@ -78,8 +204,10 @@ impl Executor {
 		}
 	}
 
-	/// track execution time of the tasks
-	fn track_execution_time(
+	/// decrease the priority of a task if it keeps running for too long
+	///
+	/// Prevents a single task from hogging the CPU
+	fn demote_task(
 		&mut self,
 		task_id: TaskId,
 	) {
@@ -96,49 +224,46 @@ impl Executor {
 	///
 	/// Loop over all tasks in the task_queue, create a waker for each task and then poll them
 	fn run_ready_tasks(&mut self) {
-		// increase the age of the remaining tasks in the Executor -- increase the priority
-		// bumps priority by 1
 		self.age_priorities();
-
 		// destructure to use shorter names
-		let Self { tasks, task_queue, waker_cache, locks } = self;
-
 		// retrieves the tasks, creates a waker, and polls the task
-		while let Some(Reverse((_, task_id))) = task_queue.lock().pop() {
+		let task_id_popped = { self.task_queue.lock().pop() };
+
+		if let Some(Reverse((_, task_id))) = task_id_popped {
 			let mut poll_result = {
 				// grab the task
-				let task = match tasks.get_mut(&task_id) {
-					Some(task) => task,
-					None => continue,
-				};
-				// get the meta data from the task
-				let task_meta_data: TaskMetadata = TaskMetadata {
-					base_priority: task.meta.base_priority,
-					dyn_priority: 0, // TODO -- what should it be?
-					locks_held: Vec::new(),
-				};
+				let task = self.tasks.get(&task_id).unwrap();
 				// get or make its waker
-				let waker = waker_cache
+				let task_queue = self.task_queue.clone();
+				let waker = self
+					.waker_cache
 					.entry(task_id)
-					.or_insert_with(|| TaskWaker::new(task_id, task_meta_data, task_queue.clone()));
-				// construct the context from the waker, you poll on the Context
-				// Context provides the waker to the task along with other relevant information
+					.or_insert_with(|| TaskWaker::new(task_id, task_queue));
+				// construct the context from the waker, you poll on the Context,
+				// it provides the waker to the task along with other relevant information
 				let mut context = Context::from_waker(waker);
 				// poll the Context
-				task.poll(&mut context)
+				self.tasks.get_mut(&task_id).unwrap().poll(&mut context)
 			};
 
 			match poll_result {
 				Poll::Ready(()) => {
-					// task done -> remove it and its cached waker
-					tasks.remove(&task_id);
-					waker_cache.remove(&task_id);
+					// NOTE: Make sure no lock is orphaned
+					// task done -> remove it, locks held by it and its cached waker
+					// since the task is done, just grab it entirely
+					// IMPORTANT: is this a good solution to this?
+					let locks_held_by_task =
+						core::mem::take(&mut self.tasks.get_mut(&task_id).unwrap().meta.locks_held);
+					// we no longer hold an immutable borrow of task.meta
+					for lock in locks_held_by_task {
+						self.release_lock(task_id, lock);
+						// Simply using this defied borrow-checker
+					}
+					self.tasks.remove(&task_id);
+					self.waker_cache.remove(&task_id);
 				},
 				Poll::Pending => {
-					// if not done, re-queue with its current dynamic priority
-					let dyn_p = tasks[&task_id].meta.dyn_priority;
-					//track_execution_time(task_id); // track the execution time TODO
-					task_queue.lock().push(Reverse((dyn_p, task_id)));
+					// Task is not finished, it will be re-queued by the waker if its needed
 				},
 			}
 		}
@@ -158,54 +283,39 @@ impl Executor {
 			interrupts::enable();
 		}
 	}
-
-	/// Calls acquire_lock when a task requests a lock
-	fn acquire_lock(
-		&mut self,
-		lock_id: LockId,
-		task_id: TaskId,
-	) {
-	}
-
-	fn release_lock(
-		&mut self,
-		lock_id: LockId,
-		task_id: TaskId,
-	) {
-	}
 }
 
 /// Custom waker for our executor
 struct TaskWaker {
 	task_id: TaskId,
-	meta: TaskMetadata,
 	task_queue: Arc<Mutex<BinaryHeap<Reverse<(u8, TaskId)>>>>,
 }
 
 impl TaskWaker {
 	fn new(
 		task_id: TaskId,
-		meta: TaskMetadata,
 		task_queue: Arc<Mutex<BinaryHeap<Reverse<(u8, TaskId)>>>>,
 	) -> Waker {
-		Waker::from(Arc::new(TaskWaker { task_id, meta, task_queue }))
+		let w = TaskWaker {
+			task_id,
+			task_queue,
+			// store a raw pointer; safe as long as executor outlives this waker
+		};
+		unsafe { Waker::from(Arc::new(w)) }
 	}
 
+	/// Puts the tasks ID back into the task_queue
+	/// the Executor determines its priority when popped
 	fn wake_task(&self) {
-		let priority = self.task_queue.lock().push(Reverse((self.meta.dyn_priority, self.task_id)));
+		// the executor will handle this when it runs this task
+		// NOTE: The priority here isn't used, the executor re-evaluates
+		self.task_queue.lock().push(Reverse((0, self.task_id)));
 	}
 }
 
-use alloc::task::Wake;
-use alloc::vec::Vec;
-use spin::Mutex;
-use x86_64::instructions::hlt;
-
-// gotta convert our TaskWaker to a Waker instance first
-// could also be done by using RawWaker
 impl Wake for TaskWaker {
 	fn wake(self: Arc<Self>) {
-		self.task_queue.lock().push(Reverse((self.meta.dyn_priority, self.task_id)));
+		self.wake_task();
 	}
 
 	fn wake_by_ref(self: &Arc<Self>) {
