@@ -67,6 +67,8 @@ impl Executor {
 		}
 		let mut queue = self.task_queue.lock();
 		queue.push(Reverse((task_priority, task_id)));
+		// IMPORTANT: do we need to add them to the queue here?
+		// They should be up for execution when they have the lock on their required resource
 	}
 
 	/// continuously runs tasks in the queue
