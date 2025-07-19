@@ -107,7 +107,7 @@ impl<A> Locked<A> {
 	}
 
 	/// returns the lock for access
-	pub fn lock(&self) -> spin::MutexGuard<A> {
+	pub fn lock(&self) -> spin::MutexGuard<'_, A> {
 		self.inner.lock()
 	}
 }
