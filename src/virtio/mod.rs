@@ -3,21 +3,19 @@
 pub mod pci;
 
 use crate::memory::BootInfoFrameAllocator;
-use core::ops::Sub;
+use crate::println;
 use core::ptr::NonNull;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use virtio_drivers::{BufferDirection, Hal};
+use x86_64::structures::paging::{Mapper, Page, PageTableFlags};
 use x86_64::{
 	PhysAddr, VirtAddr,
-	structures::paging::{
-		FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB,
-		mapper::MapToError,
-	},
+	structures::paging::{FrameAllocator, OffsetPageTable},
 };
 
-// Global reference to the mapper and frame allocator
-// gotta set them in kernels init function
+// Global reference to the frame allocator
+// gotta set it in kernel init function
 lazy_static! {
 	pub static ref FRAME_ALLOCATOR: Mutex<Option<BootInfoFrameAllocator>> = Mutex::new(None);
 	pub static ref PAGE_MAPPER: Mutex<Option<OffsetPageTable<'static>>> = Mutex::new(None);
@@ -32,45 +30,30 @@ unsafe impl Hal for OsHal {
 		pages: usize,
 		direction: BufferDirection,
 	) -> (virtio_drivers::PhysAddr, NonNull<u8>) {
-		let mut frame_allocator = FRAME_ALLOCATOR.lock();
-		let mut mapper = PAGE_MAPPER.lock();
-
-		let allocator = frame_allocator.as_mut().expect("Frame allocator not initialized");
-		let mapper = mapper.as_mut().expect("Page Mapper not initialized");
-
 		if pages > 1 {
 			panic!("dma_alloc: multipage contiguous allocation not supported yet");
 		}
 
-		// allocating a physical frame
+		let mut frame_allocator = FRAME_ALLOCATOR.lock();
+		let allocator = frame_allocator.as_mut().expect("Frame allocator not initialized");
+
+		// Allocate a physical frame
 		let frame = allocator.allocate_frame().expect("Failed to allocate frame for DMA");
-		let paddr = frame.start_address().as_u64();
+		let paddr = frame.start_address();
 
-		// virtual address for this physical frame
-		let vaddr = VirtAddr::new(paddr + unsafe { PHYSICAL_MEMORY_OFFSET });
-		let page = Page::containing_address(vaddr);
-		// the DMA buffer needs to be writable
-		let flags = PageTableFlags::WRITABLE | PageTableFlags::PRESENT;
+		// SIMPLE FIX: Use the bootloader's identity mapping instead of creating new mappings
+		// The bootloader maps all physical memory to virtual addresses starting at PHYSICAL_MEMORY_OFFSET
+		let vaddr = VirtAddr::new(paddr.as_u64() + unsafe { PHYSICAL_MEMORY_OFFSET });
 
-		// mapping the page
-		unsafe {
-			mapper
-				.map_to(page, frame, flags, allocator)
-				.expect("Failed to map DMA page")
-				.flush();
-		}
-
-		let virtio_paddr = paddr as usize;
+		let virtio_paddr = paddr.as_u64() as usize;
 		(virtio_paddr, NonNull::new(vaddr.as_mut_ptr()).unwrap())
 	}
-
 	unsafe fn dma_dealloc(
 		paddr: virtio_drivers::PhysAddr,
 		vaddr: NonNull<u8>,
 		pages: usize,
 	) -> i32 {
-		panic!("dma_dealloc: paddr={:#x}, pages={} (leaking memory)", paddr, pages);
-		// maybe use trace! crate but it might be unusable in no-std envs
+		println!("[VirtIO] Warning: Leaking DMA memory at paddr={:#x}, pages={}", paddr, pages);
 		0
 	}
 
@@ -78,38 +61,13 @@ unsafe impl Hal for OsHal {
 		paddr: virtio_drivers::PhysAddr,
 		size: usize,
 	) -> NonNull<u8> {
-		// This function is for mapping the device's control registers.
+		// For MMIO, we use identity mapping with the physical memory offset
+		// This avoids issues with huge pages in the bootloader's page tables
 		let paddr = PhysAddr::new(paddr as u64);
-		let vaddr = VirtAddr::new(paddr.as_u64()); // We can use identity mapping for MMIO
+		let vaddr = VirtAddr::new(paddr.as_u64() + PHYSICAL_MEMORY_OFFSET);
 
-		let start_page: Page = Page::containing_address(vaddr);
-		let end_page: Page = Page::containing_address(vaddr + (size - 1));
-
-		let mut mapper = PAGE_MAPPER.lock();
-		let mut frame_allocator = FRAME_ALLOCATOR.lock();
-		let mapper = mapper.as_mut().expect("Page Mapper not initialized");
-		let frame_allocator = frame_allocator.as_mut().expect("Frame allocator not initialized");
-
-		for page in Page::range_inclusive(start_page, end_page) {
-			let frame = PhysFrame::containing_address(paddr + (page - start_page) * 4096);
-
-			// These flags are crucial for device memory:
-			// - PRESENT: The page is mapped.
-			// - WRITABLE: We need to write to device registers.
-			// - NO_EXECUTE: We should never execute code from device memory.
-			// - WRITE_THROUGH: Ensures writes go directly to the device and are not cached.
-			let flags = PageTableFlags::PRESENT
-				| PageTableFlags::WRITABLE
-				| PageTableFlags::NO_EXECUTE
-				| PageTableFlags::WRITE_THROUGH;
-
-			// Create the mapping in the page table.
-			mapper
-				.map_to(page, frame, flags, frame_allocator)
-				.expect("Failed to map MMIO page")
-				.flush();
-		}
-
+		// For MMIO regions, the bootloader should have already set up appropriate mappings
+		// We just return the virtual address
 		NonNull::new(vaddr.as_mut_ptr()).unwrap()
 	}
 
@@ -124,7 +82,6 @@ unsafe impl Hal for OsHal {
 		let offset = VirtAddr::new(PHYSICAL_MEMORY_OFFSET);
 
 		// This is the function you wrote in memory.rs!
-
 		let phyaddr = crate::memory::translate_addr(vaddr, offset)
 			.expect("Failed to translate virtual address for sharing");
 
