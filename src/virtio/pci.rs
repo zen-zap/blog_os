@@ -29,25 +29,25 @@ unsafe fn read_config_dword(
 }
 
 /// Scans the PCI bus for a VirtIO device using the correct `enumerate_bus` method.
-pub fn scan(root: &PciRoot<PciConfigIo>) -> Option<DeviceFunction> {
-	// Takes &PciRoot, not &mut
+pub fn scan(root: &mut PciRoot<PciConfigIo>) -> Option<DeviceFunction> {
 	println!("[PCI] Scanning for devices...");
-
-	// We must manually iterate through all possible buses.
 	for bus_num in 0..=255 {
-		// The `enumerate_bus` method gives us an iterator for all devices on a specific bus.
 		for (device_func, header) in root.enumerate_bus(bus_num) {
 			println!(
 				"  - Found device on bus {}, device {} -> Vendor={:?}, Device={:?}",
 				bus_num, device_func.device, header.vendor_id, header.device_id
 			);
-
-			// Check for a VirtIO device (Vendor ID 0x1AF4)
 			if header.vendor_id == 0x1AF4 {
-				println!("    -> Found a VirtIO device!");
+				// Vendor IDs assigned by RedHat
+				println!("6900 -> Found a VirtIO device!");
 
-				// We found it. We'll assume it's on function 0.
-				// You could add logic here to check other functions if needed.
+				// Read BAR0 to find the MMIO base address.
+				// The lower bits of the BAR value have flags, so we mask them off.
+				/*let bar0 = match root.bar_info(device_func, 0).unwrap() {
+					Some(bar_info) => bar_info.memory_address_size().unwrap().0 & 0xFFFFFFF0,
+					None => return None, // or handle the missing BAR as needed
+				};
+				println!("    -> Device BAR0 (MMIO Physical Address): {:#x}", bar0);*/
 				let device_function =
 					DeviceFunction { bus: bus_num, device: device_func.device, function: 0 };
 

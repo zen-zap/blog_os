@@ -36,6 +36,7 @@ features = ["alloc"]
 
 [package.metadata.bootimage]
 run-args = [
+    "-m", "256M",
     "-drive", "file=disk.img,format=raw,if=none,id=disk0",
     "-device", "virtio-blk-pci,drive=disk0",
     "-serial", "stdio"

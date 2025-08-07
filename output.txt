@@ -1,0 +1,103 @@
+Building bootloader
+Running: `qemu-system-x86_64 -drive format=raw,file=target/x86_64-blog_os/debug/bootimage-blog_os.bin -m 256M -drive file=disk.img,format=raw,if=none,id=disk0 -device virtio-blk-pci,drive=disk0 -serial stdio`
+Hello zen-zap!
+[INFO] Boot Info Received:
+  - Physical Memory Offset: 0x18000000000
+  - Memory Map:
+    - Start: 0x00000000, End: 0x00001000, Size: 4 KB, Type: FrameZero
+    - Start: 0x00001000, End: 0x00005000, Size: 16 KB, Type: PageTable
+    - Start: 0x00005000, End: 0x00015000, Size: 64 KB, Type: Bootloader
+    - Start: 0x00015000, End: 0x00016000, Size: 4 KB, Type: BootInfo
+    - Start: 0x00016000, End: 0x0001e000, Size: 32 KB, Type: Kernel
+    - Start: 0x0001e000, End: 0x0009f000, Size: 516 KB, Type: KernelStack
+    - Start: 0x0009f000, End: 0x000a0000, Size: 4 KB, Type: Reserved
+    - Start: 0x000f0000, End: 0x00100000, Size: 64 KB, Type: Reserved
+    - Start: 0x00100000, End: 0x0027f000, Size: 1532 KB, Type: KernelStack
+    - Start: 0x0027f000, End: 0x00400000, Size: 1540 KB, Type: Usable
+    - Start: 0x00400000, End: 0x004d3000, Size: 844 KB, Type: Kernel
+    - Start: 0x004d3000, End: 0x008df000, Size: 4144 KB, Type: PageTable
+    - Start: 0x008df000, End: 0x0ffdd000, Size: 252920 KB, Type: Usable
+    - Start: 0x0ffdd000, End: 0x10000000, Size: 140 KB, Type: Reserved
+    - Start: 0xfffc0000, End: 0x100000000, Size: 256 KB, Type: Reserved
+    - Start: 0xfd00000000, End: 0x10000000000, Size: 12582912 KB, Type: Reserved
+=================
+[PCI] Initializing PCI and finding devices
+[PCI] Scanning for devices...
+  - Found device on bus 0, device 0 -> Vendor=32902, Device=4663
+  - Found device on bus 0, device 1 -> Vendor=32902, Device=28672
+  - Found device on bus 0, device 1 -> Vendor=32902, Device=28688
+  - Found device on bus 0, device 1 -> Vendor=32902, Device=28947
+  - Found device on bus 0, device 2 -> Vendor=4660, Device=4369
+  - Found device on bus 0, device 3 -> Vendor=32902, Device=4110
+  - Found device on bus 0, device 4 -> Vendor=6900, Device=4097
+6900 -> Found a VirtIO device!
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe000000
+  - Virtual Address:  0x180fe000000
+  - Size: 4096 bytes
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe003000
+  - Virtual Address:  0x180fe003000
+  - Size: 4096 bytes
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe001000
+  - Virtual Address:  0x180fe001000
+  - Size: 4096 bytes
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe002000
+  - Virtual Address:  0x180fe002000
+  - Size: 4096 bytes
+[VirtIO] PCI transport created successfully.
+[DMA] Allocating DMA buffer (1 pages):
+  - Physical Address (for device): 0x29b000
+  - Virtual Address (for CPU):  0x1800029b000
+[DMA] Allocating DMA buffer (1 pages):
+  - Physical Address (for device): 0x29c000
+  - Virtual Address (for CPU):  0x1800029c000
+[VirtIO] Block Device Initialized! Capacity: 131072 sectors
+[VirtIO] Reading block 0...
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000200c38
+  - Physical Address (to device): 0x27dc38
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000201640
+  - Physical Address (to device): 0x27e640
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000200a7f
+  - Physical Address (to device): 0x27da7f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[VirtIO] Successfully read block 0! (First 16 bytes: [68, 65, 6c, 6c, 6f, 20, 77, 6f, 72, 6c, 64, 21, 20, 74, 68, 69])
+[VirtIO] Testing write/read...
+[VirtIO] Writing test data to block 0...
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000200c28
+  - Physical Address (to device): 0x27dc28
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000201918
+  - Physical Address (to device): 0x27e918
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000200a6f
+  - Physical Address (to device): 0x27da6f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[VirtIO] Reading back from block 0...
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000200c38
+  - Physical Address (to device): 0x27dc38
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000201b60
+  - Physical Address (to device): 0x27eb60
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x10000200a7f
+  - Physical Address (to device): 0x27da7f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[VirtIO] Read back: 'hello world! this is a test message from blog_os kernel!'
+[VirtIO] Write/Read test PASSED!
+[VirtIO] Warning: Leaking DMA memory at paddr=0x29b000, pages=1
+[VirtIO] Warning: Leaking DMA memory at paddr=0x29c000, pages=1
+async number: 69

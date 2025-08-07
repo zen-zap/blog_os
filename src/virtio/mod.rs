@@ -28,25 +28,30 @@ pub static mut PHYSICAL_MEMORY_OFFSET: u64 = 0;
 unsafe impl Hal for OsHal {
 	fn dma_alloc(
 		pages: usize,
-		direction: BufferDirection,
+		_direction: BufferDirection,
 	) -> (virtio_drivers::PhysAddr, NonNull<u8>) {
 		if pages > 1 {
 			panic!("dma_alloc: multipage contiguous allocation not supported yet");
 		}
 
-		let mut frame_allocator = FRAME_ALLOCATOR.lock();
-		let allocator = frame_allocator.as_mut().expect("Frame allocator not initialized");
+		let mut frame_allocator_lock = FRAME_ALLOCATOR.lock();
+		let allocator = frame_allocator_lock.as_mut().expect("Frame allocator not initialized");
 
-		// Allocate a physical frame
+		// 1. Allocate a physical frame.
 		let frame = allocator.allocate_frame().expect("Failed to allocate frame for DMA");
 		let paddr = frame.start_address();
 
-		// SIMPLE FIX: Use the bootloader's identity mapping instead of creating new mappings
-		// The bootloader maps all physical memory to virtual addresses starting at PHYSICAL_MEMORY_OFFSET
+		// 2. Calculate its virtual address in the higher-half mapping.
 		let vaddr = VirtAddr::new(paddr.as_u64() + unsafe { PHYSICAL_MEMORY_OFFSET });
 
-		let virtio_paddr = paddr.as_u64() as usize;
-		(virtio_paddr, NonNull::new(vaddr.as_mut_ptr()).unwrap())
+		println!("[DMA] Allocating DMA buffer ({} pages):", pages);
+		println!("  - Physical Address (for device): {:#x}", paddr);
+		println!("  - Virtual Address (for CPU):  {:#x}", vaddr);
+
+		// 3. NO MAPPING IS NEEDED. The bootloader's huge page mapping already covers this.
+
+		// 4. Return the addresses.
+		(paddr.as_u64() as usize, NonNull::new(vaddr.as_mut_ptr()).unwrap())
 	}
 	unsafe fn dma_dealloc(
 		paddr: virtio_drivers::PhysAddr,
@@ -66,6 +71,11 @@ unsafe impl Hal for OsHal {
 		let paddr = PhysAddr::new(paddr as u64);
 		let vaddr = VirtAddr::new(paddr.as_u64() + PHYSICAL_MEMORY_OFFSET);
 
+		println!("[MMAP] Mapping device MMIO region:");
+		println!("  - Physical Address: {:#x}", paddr);
+		println!("  - Virtual Address:  {:#x}", vaddr);
+		println!("  - Size: {} bytes", size);
+
 		// For MMIO regions, the bootloader should have already set up appropriate mappings
 		// We just return the virtual address
 		NonNull::new(vaddr.as_mut_ptr()).unwrap()
@@ -84,6 +94,10 @@ unsafe impl Hal for OsHal {
 		// This is the function you wrote in memory.rs!
 		let phyaddr = crate::memory::translate_addr(vaddr, offset)
 			.expect("Failed to translate virtual address for sharing");
+
+		println!("[SHARE] Translating buffer address for device:");
+		println!("  - Virtual Address (from CPU): {:#x}", vaddr);
+		println!("  - Physical Address (to device): {:#x}", phyaddr);
 
 		phyaddr.as_u64() as usize
 	}
