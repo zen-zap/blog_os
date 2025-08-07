@@ -16,7 +16,7 @@ pub enum BlockError {
 	InvalidDataStream,
 }
 
-/// Trait representing a block device capable of reading, writing, and querying block information.
+/// Interface to any storage that presents itself in fixed-size-blocks
 ///
 /// Implementors of this trait provide mechanisms to:
 /// - Read data from a specific block into a buffer.

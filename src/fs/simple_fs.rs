@@ -1,5 +1,7 @@
-use crate::fs::disk_handler;
-use crate::fs::disk_handler::DiskImage;
+//! in src/fs/simple_fs.rs
+
+use crate::fs::block_handler::*;
+use crate::fs::disk_handler::*;
 use alloc::{string::String, vec::Vec};
 
 #[derive(Debug, Copy, Clone)]
@@ -29,14 +31,15 @@ pub trait FileSystem {
 	fn list_file(&mut self) -> Result<Vec<String>, FileError>;
 }
 
-/// SimA - Simple File System A
-pub struct SimA {
+/// SFS - Simple File System
+pub struct SFS {
 	disk_image: DiskImage,
+	sb: SuperBlock,
 }
 
 // It should hold access to the disk image right?
 
-impl FileSystem for SimA {
+impl FileSystem for SFS {
 	fn create_file(
 		&mut self,
 		name: &str,

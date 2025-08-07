@@ -14,6 +14,7 @@ pic8259 = "0.10.1"
 pc-keyboard = "0.7.0"
 linked_list_allocator = "0.9.0"
 virtio-drivers = "0.11"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 
 [dependencies.lazy_static]
 version = "1.0"
@@ -35,8 +36,9 @@ features = ["alloc"]
 
 [package.metadata.bootimage]
 run-args = [
-    "-drive", "file=disk.img,format=raw,if=none,id=disk",
-    "-device", "virtio-blk-pci,drive=disk"
+    "-drive", "file=disk.img,format=raw,if=none,id=disk0",
+    "-device", "virtio-blk-pci,drive=disk0",
+    "-serial", "stdio"
 ]
 
 test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-display", "none"]

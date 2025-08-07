@@ -9,15 +9,15 @@
 #![feature(associated_type_defaults)]
 
 pub mod allocator;
-mod fs;
+// pub mod fs;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod scanc;
 pub mod serial;
-mod storage;
 pub mod task;
 pub mod vga_buffer;
+pub mod virtio;
 
 extern crate alloc;
 

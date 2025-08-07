@@ -13,12 +13,20 @@ use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use blog_os::interrupts::InterruptIndex::Keyboard;
 use blog_os::memory::{self, BootInfoFrameAllocator, translate_addr};
 use blog_os::task::{Task, executor::Executor, keyboard, simple_executor::SimpleExecutor};
-use blog_os::{allocator, println};
+use blog_os::virtio::pci::PciConfigIo;
+use blog_os::virtio::{FRAME_ALLOCATOR, OsHal, PAGE_MAPPER, pci};
+use blog_os::{allocator, print, println};
 use bootloader::{BootInfo, entry_point};
 use core::arch::asm;
 use core::panic::PanicInfo;
+use virtio_drivers::device::blk::VirtIOBlk;
+use virtio_drivers::transport::mmio::VirtIOHeader;
+use virtio_drivers::transport::pci::PciTransport;
+use virtio_drivers::transport::pci::bus::PciRoot;
+use virtio_drivers::{Hal, PhysAddr};
 use x86_64::VirtAddr;
 use x86_64::registers::control::Cr2;
+use x86_64::structures::paging::page_table::FrameError::FrameNotPresent;
 use x86_64::structures::paging::{Page, PageTable, Translate};
 
 extern crate alloc;
@@ -40,6 +48,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	let mut mapper = unsafe { memory::init(phys_mem_offset) };
 	// let mut frame_allocator = memory::EmptyFrameAllocator;
 	let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
+
+	*FRAME_ALLOCATOR.lock() = Some(frame_allocator);
+	*PAGE_MAPPER.lock() = Some(mapper);
 
 	//for (i, entry) in l4_table.iter().enumerate() {
 	//    if !entry.is_unused() {
@@ -91,7 +102,47 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	//let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
 	//unsafe { page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e) };
 
-	allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed!");
+	{
+		let mut mapper_lock = PAGE_MAPPER.lock();
+		let mut allocator_lock = FRAME_ALLOCATOR.lock();
+
+		allocator::init_heap(mapper_lock.as_mut().unwrap(), allocator_lock.as_mut().unwrap())
+			.expect("heap initialization failed!");
+	}
+
+	println!("[PCI] Initializing PCI and finding devices");
+	let pci_config_access = PciConfigIo;
+	let mut pci_root = PciRoot::new(pci_config_access);
+
+	// In kernel_main...
+
+	if let Some(device_function) = pci::scan(&pci_root) {
+		let mut pci_root_mut = pci_root;
+		let transport = PciTransport::new::<OsHal, _>(&mut pci_root_mut, device_function)
+			.expect("Failed to create PCI transport");
+
+		println!("[VirtIO] PCI transport created successfully.");
+
+		let mut blk_dev =
+			VirtIOBlk::<OsHal, _>::new(transport).expect("failed to create blk driver");
+
+		println!("[VirtIO] Block Device Initialized! Capacity: {} sectors", blk_dev.capacity());
+
+		// --- THIS IS THE CORRECTED CODE ---
+
+		// 1. Create a buffer for one sector (512 bytes).
+		let mut buffer = [0u8; 512];
+
+		// 2. Call the simple, blocking read_blocks method.
+		//    This function will not return until the read is complete.
+		println!("[VirtIO] Reading block 0...");
+		blk_dev.read_blocks(0, &mut buffer).expect("read_blocks failed");
+
+		// 3. The data is now in the buffer.
+		println!("[VirtIO] Successfully read block 0! (First 16 bytes: {:02x?})", &buffer[0..16]);
+	} else {
+		println!("[PCI] No VirtIO block device found.");
+	}
 
 	// let heap_value = Box::new(41);
 	// println!("heap value at {:p}", heap_value);
