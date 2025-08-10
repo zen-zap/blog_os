@@ -7,9 +7,10 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
 #![feature(associated_type_defaults)]
-
+#![feature(trivial_bounds)]
 pub mod allocator;
 // pub mod fs;
+pub mod fs;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
@@ -20,6 +21,7 @@ pub mod vga_buffer;
 pub mod virtio;
 
 extern crate alloc;
+extern crate static_assertions as sa;
 
 use core::panic::PanicInfo;
 

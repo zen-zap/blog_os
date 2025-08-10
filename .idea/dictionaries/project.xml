@@ -2,6 +2,7 @@
   <dictionary name="project">
     <words>
       <w>paddr</w>
+      <w>virt</w>
       <w>virtio</w>
       <w>wakers</w>
     </words>

@@ -48,9 +48,11 @@ unsafe impl Hal for OsHal {
 		println!("  - Physical Address (for device): {:#x}", paddr);
 		println!("  - Virtual Address (for CPU):  {:#x}", vaddr);
 
-		// 3. NO MAPPING IS NEEDED. The bootloader's huge page mapping already covers this.
+		// NO MAPPING IS NEEDED. The bootloader's huge page mapping already covers this.
+		// Here, there is no work with Pages. The Frame is an actual block of physical memory --
+		// here 4 KiB in size.
 
-		// 4. Return the addresses.
+		// Here, we return the physical address
 		(paddr.as_u64() as usize, NonNull::new(vaddr.as_mut_ptr()).unwrap())
 	}
 	unsafe fn dma_dealloc(
@@ -58,7 +60,9 @@ unsafe impl Hal for OsHal {
 		vaddr: NonNull<u8>,
 		pages: usize,
 	) -> i32 {
-		println!("[VirtIO] Warning: Leaking DMA memory at paddr={:#x}, pages={}", paddr, pages);
+		println!("[DMA] Warning: Leaking DMA memory at paddr={:#x}, pages={}", paddr, pages);
+
+		// TODO: Currently leaking memory, add logic for deallocation of the frame
 		0
 	}
 
