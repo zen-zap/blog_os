@@ -1,3 +1,5 @@
+//! in src/fs/layout.rs
+
 use crate::fs::simple_fs::FileSystemError;
 use alloc::vec::Vec;
 use sa::const_assert;
@@ -15,6 +17,11 @@ pub const SUPERBLOCK_BLOCK: u64 = 0;
 pub const INODE_BITMAP_BLOCK: u64 = 1;
 pub const DATA_BITMAP_BLOCK: u64 = 2;
 pub const INODE_TABLE_START_BLOCK: u64 = 3;
+
+// Directory Entry Layout: 64 bytes per entry -> 8 entries per 512 block
+pub const DIR_ENTRY_SIZE: usize = 64;
+pub const DIR_NAME_MAX: usize = 52;
+pub const DIR_ENTRIES_PER_BLOCK: usize = BLOCK_SIZE / DIR_ENTRY_SIZE;
 
 type U32Le = U32<LE>;
 
@@ -153,6 +160,21 @@ impl core::convert::TryFrom<DiskInode> for Inode {
 
 const_assert!(core::mem::size_of::<DiskInode>() == INODE_SIZE);
 
+// On-disk directory entry: 64 bytes
+#[derive(Debug, Copy, Clone, IntoBytes, FromBytes, Immutable, KnownLayout)]
+#[repr(C)]
+pub struct DiskDirEntry {
+	pub inode: U64<LE>,    // target inode number
+	pub name_len: U16<LE>, // length of name in bytes
+	pub flags: U16<LE>,    // bit0 = USED
+	pub name: [u8; DIR_NAME_MAX],
+}
+
+const_assert!(size_of::<DiskDirEntry>() == DIR_ENTRY_SIZE);
+
+// Directory Entry Flag
+pub const DIRENT_USED: u16 = 1;
+
 // Shouldn't the bitmap bits also hold which resource block they are pointing to?
 // Nope the position of the bitmap is the pointer .. that's the whole point of it!
 // A Bitmap is a view over raw bytes
@@ -268,3 +290,7 @@ impl From<FileType> for u16 {
 		value as u16
 	}
 }
+
+// We need something to store the directories too .. some on-disk data structure is needed to
+// store the directories too, so we'll reserve on one block for this that would hold the entire
+// mapping for the filenames
