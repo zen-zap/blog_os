@@ -2,16 +2,17 @@
 
 use super::{
 	block_dev::{BlockDevice, BlockError},
-	layout::{
-		BLOCK_SIZE, Bitmap, DATA_BITMAP_BLOCK, INODE_BITMAP_BLOCK, INODE_SIZE,
-		INODE_TABLE_START_BLOCK, INODES_PER_BLOCK, SUPERBLOCK_BLOCK, SuperBlock,
-	},
+	layout::*,
 };
+use crate::fs::layout::FileType::File;
 use crate::println;
 use alloc::{string::String, vec::Vec};
+use core::convert::TryFrom;
 use zerocopy::{FromBytes, IntoBytes};
 
 const MAGIC_NUMBER: u32 = 0x_DEAD_BEEF;
+
+// TODO: Write a Wrapper for the VirtIoBlkDevice --- currently just using the trait implementations
 
 /// SFS - Simple File System
 #[derive(Debug)]
@@ -43,11 +44,15 @@ impl<D: BlockDevice> SFS<D> {
 			inode_count,
 			data_block_start,
 			data_block_count,
-			_pad0: 0, // passing field -- required by IntoBytes trait
 		};
 
+		let dsb = DiskSuperBlock::from(sb);
+		let mut block = [0u8; BLOCK_SIZE];
+		let dsb_bytes = dsb.as_bytes();
+		block[..dsb_bytes.len()].copy_from_slice(dsb_bytes);
+
 		device
-			.write_blocks(SUPERBLOCK_BLOCK, sb.as_bytes())
+			.write_blocks(SUPERBLOCK_BLOCK, dsb.as_bytes())
 			.map_err(|_| FileSystemError::BlockError);
 
 		let empty_bitmap_block = [0u8; BLOCK_SIZE];
@@ -71,7 +76,11 @@ impl<D: BlockDevice> SFS<D> {
 			.read_blocks(SUPERBLOCK_BLOCK, &mut buffer)
 			.map_err(|_| FileSystemError::InvalidSuperBlock);
 
-		let superblock = SuperBlock::read_from_bytes(&buffer[..])
+		let size = size_of::<DiskSuperBlock>();
+		let disk_superblock = DiskSuperBlock::ref_from_bytes(&buffer[..size])
+			.map_err(|_| FileSystemError::InvalidSuperBlock)?;
+
+		let superblock = SuperBlock::try_from(*disk_superblock)
 			.map_err(|_| FileSystemError::InvalidSuperBlock)?;
 
 		if superblock.magic_number != MAGIC_NUMBER {
@@ -79,6 +88,89 @@ impl<D: BlockDevice> SFS<D> {
 		}
 
 		Ok(Self { device, superblock })
+	}
+
+	pub fn allocate_inode(&mut self) -> Result<u64, FileSystemError> {
+		let mut bitmap_buffer = [0u8; BLOCK_SIZE];
+
+		self.device
+			.read_blocks(INODE_BITMAP_BLOCK, &mut bitmap_buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		// we gotta wrap the buffer around this to work on it as a Bitmap
+		let mut inode_bitmap = Bitmap::new(&mut bitmap_buffer);
+
+		let free_inode_index =
+			inode_bitmap.find_and_set_first_free().ok_or(FileSystemError::NoSpace)?;
+
+		// here we're working a reference of the bitmap_buffer -- so it is still valid and can be
+		// passed as the buffer to the write_blocks
+
+		// so the write_blocks of the BlockDevice should be able to overwrite the contents of the
+		// block if any exists
+		self.device
+			.write_blocks(self.superblock.inode_bitmap_block, &bitmap_buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		Ok(free_inode_index as u64)
+	}
+
+	pub fn read_inode(
+		&mut self,
+		inode_index: u64,
+	) -> Result<Inode, FileSystemError> {
+		let block_num =
+			self.superblock.inode_table_start_block + (inode_index / INODES_PER_BLOCK as u64);
+
+		let offset_in_block = (inode_index % INODES_PER_BLOCK as u64) as usize * INODE_SIZE;
+
+		let mut buffer = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(block_num, &mut buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		// so here we read the disk inode from the buffer
+		let size = size_of::<DiskInode>();
+		let disk_inode =
+			DiskInode::ref_from_bytes(&buffer[offset_in_block..(offset_in_block + size)])
+				.map_err(|_| FileSystemError::BlockError)?;
+
+		let inode = Inode::try_from(*disk_inode).map_err(|_| FileSystemError::BlockError)?;
+
+		Ok(inode)
+	}
+
+	pub fn write_inode(
+		&mut self,
+		inode: Inode,
+		inode_idx: u64,
+	) -> Result<(), FileSystemError> {
+		// then we have to know which actual inode to write this into
+		// the free_inode_idx is just the index of the bit in the inode_bitmap
+		// so we gotta fetch the inode tables now, then index from those tables
+
+		let block_num =
+			self.superblock.inode_table_start_block + (inode_idx / INODES_PER_BLOCK as u64);
+
+		let offset_in_block = (inode_idx % INODES_PER_BLOCK as u64) as usize * INODE_SIZE;
+
+		let mut buffer = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(block_num, &mut buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		// so here we read the disk inode from the buffer
+		let disk_inode = DiskInode::from(inode);
+		//let inode_m = Inode::try_from(disk_inode).unwrap();
+		let size = size_of::<DiskInode>();
+		let inode_slice = &mut buffer[offset_in_block..(offset_in_block + size)];
+		inode_slice.copy_from_slice(disk_inode.as_bytes());
+
+		self.device
+			.write_blocks(block_num, &buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		Ok(())
 	}
 }
 
@@ -114,6 +206,7 @@ pub enum FileSystemError {
 	FormatFailed,
 	MountFailed,
 	BlockError,
+	NoSpace,
 	CorruptLayout,
 	InvalidSuperBlock,
 }
