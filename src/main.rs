@@ -6,6 +6,7 @@
 #![test_runner(blog_os::test_runner)]
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use blog_os::fs::simple_fs::{FileSystem, FileSystemError, SFS};
 use blog_os::{
 	allocator,
 	interrupts::InterruptIndex::Keyboard,
@@ -29,6 +30,7 @@ use x86_64::{
 	registers::control::Cr2,
 	structures::paging::{Page, PageTable, Translate, page_table::FrameError::FrameNotPresent},
 };
+use zerocopy::IntoBytes;
 
 extern crate alloc;
 
@@ -124,6 +126,45 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			println!("[VirtIO] Write/Read test PASSED!");
 		} else {
 			println!("[VirtIO] Write/Read test FAILED!");
+		}
+
+		println!("[SFS] Initializing...");
+
+		let mut fs = match SFS::mount(blk_dev) {
+			Ok(fs) => {
+				println!("[SFS] Filesystem mounted successfully");
+				fs
+			},
+			Err(_) => {
+				println!("[SFS] Mount failed or filesystem not found! Formatting disk...");
+
+				// We need to re-create the block device
+				let mut pci_root_for_format = PciRoot::new(pci_config_access);
+				let transport =
+					PciTransport::new::<OsHal, _>(&mut pci_root_for_format, device_function)
+						.expect("Failed to re-create transport for format");
+
+				let blk_dev_for_format = VirtIOBlk::<OsHal, _>::new(transport)
+					.expect("Failed to re-create blk_dev for format");
+
+				let mut fs = SFS::format(blk_dev_for_format).expect("Failed to format disk.");
+
+				fs.init_root_directory().expect("Failed to init root directory");
+
+				fs
+			},
+		};
+
+		println!("[SFS] Testing File creation..");
+		match fs.create_file("hello.txt") {
+			Ok(handle) => println!("File created with handle {:?}", handle),
+			Err(e) => println!("Failed to create file: {:?}", e),
+		}
+
+		// You can try creating it again to test the "FileExists" error path
+		match fs.create_file("hello.txt") {
+			Ok(_) => println!("[FS] This should not happen!"),
+			Err(e) => println!("[FS] Correctly failed to create existing file: {:?}", e),
 		}
 	} else {
 		println!("[PCI] No VirtIO block device found.");

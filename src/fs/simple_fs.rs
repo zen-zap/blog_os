@@ -1,17 +1,16 @@
 //! in src/fs/simple_fs.rs
 
-use super::{
-	block_dev::{BlockDevice, BlockError},
-	layout::*,
-};
+use super::{block_dev::BlockDevice, layout::*};
 use crate::fs::layout::FileType::File;
 use crate::println;
 use alloc::{string::String, vec::Vec};
 use core::convert::TryFrom;
+use core::ptr::write;
 use pc_keyboard::KeyCode::P;
 use zerocopy::{FromBytes, IntoBytes, KnownLayout, U16, U32, U64};
 
 const MAGIC_NUMBER: u32 = 0x_DEAD_BEEF;
+const ROOT_DIRECTORY_INODE: u64 = 0;
 
 // TODO: Write a Wrapper for the VirtIoBlkDevice --- currently just using the trait implementations
 
@@ -30,7 +29,7 @@ impl<D: BlockDevice> SFS<D> {
 
 		let capacity: u64 = device.capacity() as u64;
 
-		let inode_table_blocks = capacity / 5; // 5% of the total capacity goes to the INODE_TABLE
+		let inode_table_blocks = capacity / 10; // 10% of the total capacity goes to the INODE_TABLE
 		let inode_count = inode_table_blocks * INODES_PER_BLOCK as u64;
 
 		let data_block_start = INODE_TABLE_START_BLOCK + inode_table_blocks;
@@ -47,14 +46,14 @@ impl<D: BlockDevice> SFS<D> {
 			data_block_count,
 		};
 
+		let mut superblock_buffer = [0u8; BLOCK_SIZE];
 		let dsb = DiskSuperBlock::from(sb);
-		let mut block = [0u8; BLOCK_SIZE];
-		let dsb_bytes = dsb.as_bytes();
-		block[..dsb_bytes.len()].copy_from_slice(dsb_bytes);
+
+		superblock_buffer[..size_of::<DiskSuperBlock>()].copy_from_slice(dsb.as_bytes());
 
 		device
-			.write_blocks(SUPERBLOCK_BLOCK, dsb.as_bytes())
-			.map_err(|_| FileSystemError::BlockError);
+			.write_blocks(SUPERBLOCK_BLOCK, &superblock_buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
 
 		let empty_bitmap_block = [0u8; BLOCK_SIZE];
 		// Writing the INODE BITMAP BLOCK
@@ -116,6 +115,7 @@ impl<D: BlockDevice> SFS<D> {
 		Ok(free_inode_index as u64)
 	}
 
+	/// Allocates a data block following a read-modify-write pattern
 	pub fn allocate_data_block(&mut self) -> Result<u64, FileSystemError> {
 		let mut bm_buffer = [0u8; BLOCK_SIZE];
 
@@ -329,6 +329,72 @@ impl<D: BlockDevice> SFS<D> {
 
 		Ok(())
 	}
+
+	fn create_file_in_root(
+		&mut self,
+		name: &str,
+	) -> Result<(u64 /*inode index*/, u64 /*dir block*/), FileSystemError> {
+		if name.as_bytes().len() > DIR_NAME_MAX || name.is_empty() {
+			return Err(FileSystemError::NameTooLong);
+		}
+
+		// Read root directory block
+		let root_dir_inode = self.read_inode(ROOT_DIRECTORY_INODE)?;
+		if root_dir_inode.mode != FileType::Directory {
+			return Err(FileSystemError::CorruptLayout);
+		}
+
+		let dir_block = root_dir_inode.direct_pointers[0];
+		if dir_block == 0 {
+			return Err(FileSystemError::CorruptLayout);
+		}
+		let mut dir_block_buf = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(dir_block, &mut dir_block_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		// Collision check and find slot
+		let mut empty_slot_index: Option<usize> = None;
+		let entries = DirEntryBlock::new(&dir_block_buf);
+		for (i, entry) in entries.enumerate() {
+			let is_used = (entry.flags.get() & DIRENT_USED) != 0;
+			if is_used {
+				let entry_name_len = entry.name_len.get() as usize;
+				if &entry.name[..entry_name_len] == name.as_bytes() {
+					return Err(FileSystemError::CorruptLayout); // use FileError::FileExists at call site
+				}
+			} else if empty_slot_index.is_none() {
+				empty_slot_index = Some(i);
+			}
+		}
+		let slot_index = empty_slot_index.ok_or(FileSystemError::NoSpace)?;
+
+		// Allocate inode and write it
+		let inode_index = self.allocate_inode()?;
+		let new_inode = Inode {
+			mode: FileType::File,
+			user_id: 0,
+			group_id: 0,
+			link_count: 1,
+			size_in_bytes: 0,
+			last_access_time: 0,
+			last_modification_time: 0,
+			creation_time: 0,
+			direct_pointers: [0u64; 10],
+			indirect_pointer: 0,
+		};
+		self.write_inode(new_inode, inode_index)?;
+
+		// Write directory entry into buffer
+		self.write_dirent_into_block(&mut dir_block_buf, slot_index, inode_index, name.as_bytes())?;
+
+		// PERSIST THE UPDATED DIRECTORY BLOCK (this was missing)
+		self.device
+			.write_blocks(dir_block, &dir_block_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		Ok((inode_index, dir_block))
+	}
 }
 
 /// Holds the inode index of the file
@@ -337,11 +403,16 @@ pub struct FileHandler(pub usize);
 
 #[derive(Debug)]
 pub enum FileError {
+	BlockReadError,
+	DirectoryFull,
+	BlockWriteError,
 	FileNotFound,
 	FileExists,
 	CreationFailed,
 	NoSpace,
 	InvalidHandle,
+	InvalidName,
+	Corrupt,
 }
 
 pub trait FileSystem {
@@ -376,29 +447,13 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		&mut self,
 		name: &str,
 	) -> Result<FileHandler, FileError> {
-		// check if a file with the same name exists -- TODO
-
-		let inode_index = self.allocate_inode().map_err(|_| FileError::NoSpace)?;
-
-		let new_inode = Inode {
-			mode: FileType::File,
-			user_id: 0,
-			group_id: 0,
-			link_count: 1,
-			size_in_bytes: 0,
-			last_access_time: 0,
-			last_modification_time: 0,
-			creation_time: 0, // TODO: Implement a time source
-			direct_pointers: [0u64; 10],
-			indirect_pointer: 0,
-		};
-
-		self.write_inode(new_inode, inode_index)
-			.map_err(|_| FileError::CreationFailed)?;
-
-		self.add_root_dir_entry(inode_index, name)
-			.map_err(|_| FileError::CreationFailed)?;
-
+		let (inode_index, _dir_block) = self.create_file_in_root(name).map_err(|e| match e {
+			FileSystemError::NameTooLong => FileError::InvalidName,
+			FileSystemError::NoSpace => FileError::NoSpace,
+			FileSystemError::CorruptLayout => FileError::Corrupt,
+			_ => FileError::CreationFailed,
+		})?;
+		println!("[FS] Created file '{}' with inode #{}", name, inode_index);
 		Ok(FileHandler(inode_index as usize))
 	}
 

@@ -170,6 +170,35 @@ pub struct DiskDirEntry {
 	pub name: [u8; DIR_NAME_MAX],
 }
 
+// Helper struct to interate over different DiskDirEntries in a buffer
+pub struct DirEntryBlock<'a> {
+	block: &'a [u8; BLOCK_SIZE],
+	idx: usize,
+}
+
+impl<'a> DirEntryBlock<'a> {
+	pub fn new(block: &'a [u8; BLOCK_SIZE]) -> Self {
+		Self { block, idx: 0 }
+	}
+}
+
+impl<'a> Iterator for DirEntryBlock<'a> {
+	type Item = DiskDirEntry;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.idx >= DIR_ENTRIES_PER_BLOCK {
+			return None;
+		}
+
+		let start = self.idx * DIR_ENTRY_SIZE;
+		let end = start + DIR_ENTRY_SIZE;
+		let entry = DiskDirEntry::ref_from_bytes(&self.block[start..end]).ok()?;
+
+		self.idx += 1;
+		Some(*entry)
+	}
+}
+
 const_assert!(size_of::<DiskDirEntry>() == DIR_ENTRY_SIZE);
 
 // Directory Entry Flag

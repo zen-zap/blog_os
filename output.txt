@@ -14,9 +14,9 @@ Hello zen-zap!
     - Start: 0x000f0000, End: 0x00100000, Size: 64 KB, Type: Reserved
     - Start: 0x00100000, End: 0x0027f000, Size: 1532 KB, Type: KernelStack
     - Start: 0x0027f000, End: 0x00400000, Size: 1540 KB, Type: Usable
-    - Start: 0x00400000, End: 0x004d3000, Size: 844 KB, Type: Kernel
-    - Start: 0x004d3000, End: 0x008df000, Size: 4144 KB, Type: PageTable
-    - Start: 0x008df000, End: 0x0ffdd000, Size: 252920 KB, Type: Usable
+    - Start: 0x00400000, End: 0x004f0000, Size: 960 KB, Type: Kernel
+    - Start: 0x004f0000, End: 0x008fc000, Size: 4144 KB, Type: PageTable
+    - Start: 0x008fc000, End: 0x0ffdd000, Size: 252804 KB, Type: Usable
     - Start: 0x0ffdd000, End: 0x10000000, Size: 140 KB, Type: Reserved
     - Start: 0xfffc0000, End: 0x100000000, Size: 256 KB, Type: Reserved
     - Start: 0xfd00000000, End: 0x10000000000, Size: 12582912 KB, Type: Reserved
@@ -57,47 +57,318 @@ Hello zen-zap!
 [VirtIO] Block Device Initialized! Capacity: 131072 sectors
 [VirtIO] Reading block 0...
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000200c38
-  - Physical Address (to device): 0x27dc38
+  - Virtual Address (from CPU): 0x100001ff248
+  - Physical Address (to device): 0x27c248
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000201640
-  - Physical Address (to device): 0x27e640
+  - Virtual Address (from CPU): 0x100001ffc60
+  - Physical Address (to device): 0x27cc60
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000200a7f
-  - Physical Address (to device): 0x27da7f
+  - Virtual Address (from CPU): 0x100001ff08f
+  - Physical Address (to device): 0x27c08f
 [SHARE] Translating buffer address for device:
   - Virtual Address (from CPU): 0x444444440000
   - Physical Address (to device): 0x27f000
-[VirtIO] Successfully read block 0! (First 16 bytes: [68, 65, 6c, 6c, 6f, 20, 77, 6f, 72, 6c, 64, 21, 20, 74, 68, 69])
+[VirtIO] Successfully read block 0! (First 16 bytes: [00, 00, 02, 00, 00, 00, 00, 00, 01, 00, 00, 00, 00, 00, 00, 00])
 [VirtIO] Testing write/read...
 [VirtIO] Writing test data to block 0...
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000200c28
-  - Physical Address (to device): 0x27dc28
+  - Virtual Address (from CPU): 0x100001ff238
+  - Physical Address (to device): 0x27c238
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000201918
-  - Physical Address (to device): 0x27e918
+  - Virtual Address (from CPU): 0x100001fff38
+  - Physical Address (to device): 0x27cf38
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000200a6f
-  - Physical Address (to device): 0x27da6f
+  - Virtual Address (from CPU): 0x100001ff07f
+  - Physical Address (to device): 0x27c07f
 [SHARE] Translating buffer address for device:
   - Virtual Address (from CPU): 0x444444440000
   - Physical Address (to device): 0x27f000
 [VirtIO] Reading back from block 0...
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000200c38
-  - Physical Address (to device): 0x27dc38
+  - Virtual Address (from CPU): 0x100001ff248
+  - Physical Address (to device): 0x27c248
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000201b60
-  - Physical Address (to device): 0x27eb60
+  - Virtual Address (from CPU): 0x10000200180
+  - Physical Address (to device): 0x27d180
 [SHARE] Translating buffer address for device:
-  - Virtual Address (from CPU): 0x10000200a7f
-  - Physical Address (to device): 0x27da7f
+  - Virtual Address (from CPU): 0x100001ff08f
+  - Physical Address (to device): 0x27c08f
 [SHARE] Translating buffer address for device:
   - Virtual Address (from CPU): 0x444444440000
   - Physical Address (to device): 0x27f000
 [VirtIO] Read back: 'hello world! this is a test message from blog_os kernel!'
 [VirtIO] Write/Read test PASSED!
-[VirtIO] Warning: Leaking DMA memory at paddr=0x29b000, pages=1
-[VirtIO] Warning: Leaking DMA memory at paddr=0x29c000, pages=1
+[SFS] Initializing...
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe858
+  - Physical Address (to device): 0x27b858
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe928
+  - Physical Address (to device): 0x27b928
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe69f
+  - Physical Address (to device): 0x27b69f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[DMA] Warning: Leaking DMA memory at paddr=0x29b000, pages=1
+[DMA] Warning: Leaking DMA memory at paddr=0x29c000, pages=1
+[SFS] Mount failed or filesystem not found! Formatting disk...
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe000000
+  - Virtual Address:  0x180fe000000
+  - Size: 4096 bytes
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe003000
+  - Virtual Address:  0x180fe003000
+  - Size: 4096 bytes
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe001000
+  - Virtual Address:  0x180fe001000
+  - Size: 4096 bytes
+[MMAP] Mapping device MMIO region:
+  - Physical Address: 0xfe002000
+  - Virtual Address:  0x180fe002000
+  - Size: 4096 bytes
+[DMA] Allocating DMA buffer (1 pages):
+  - Physical Address (for device): 0x29d000
+  - Virtual Address (for CPU):  0x1800029d000
+[DMA] Allocating DMA buffer (1 pages):
+  - Physical Address (for device): 0x29e000
+  - Virtual Address (for CPU):  0x1800029e000
+[FS] Formatting Device
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe618
+  - Physical Address (to device): 0x27b618
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe7bd
+  - Physical Address (to device): 0x27b7bd
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe45f
+  - Physical Address (to device): 0x27b45f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe618
+  - Physical Address (to device): 0x27b618
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe9fe
+  - Physical Address (to device): 0x27b9fe
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe45f
+  - Physical Address (to device): 0x27b45f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe618
+  - Physical Address (to device): 0x27b618
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe9fe
+  - Physical Address (to device): 0x27b9fe
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe45f
+  - Physical Address (to device): 0x27b45f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fec08
+  - Physical Address (to device): 0x27bc08
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fecdf
+  - Physical Address (to device): 0x27bcdf
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fea4f
+  - Physical Address (to device): 0x27ba4f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001febf8
+  - Physical Address (to device): 0x27bbf8
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fecdf
+  - Physical Address (to device): 0x27bcdf
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fea3f
+  - Physical Address (to device): 0x27ba3f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe968
+  - Physical Address (to device): 0x27b968
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fea4f
+  - Physical Address (to device): 0x27ba4f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe7af
+  - Physical Address (to device): 0x27b7af
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe958
+  - Physical Address (to device): 0x27b958
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fea4f
+  - Physical Address (to device): 0x27ba4f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe79f
+  - Physical Address (to device): 0x27b79f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe838
+  - Physical Address (to device): 0x27b838
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe946
+  - Physical Address (to device): 0x27b946
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe67f
+  - Physical Address (to device): 0x27b67f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe828
+  - Physical Address (to device): 0x27b828
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe946
+  - Physical Address (to device): 0x27b946
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe66f
+  - Physical Address (to device): 0x27b66f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001febf8
+  - Physical Address (to device): 0x27bbf8
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001ff07d
+  - Physical Address (to device): 0x27c07d
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fea3f
+  - Physical Address (to device): 0x27ba3f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SFS] Testing File creation..
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe408
+  - Physical Address (to device): 0x27b408
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe507
+  - Physical Address (to device): 0x27b507
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe24f
+  - Physical Address (to device): 0x27b24f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe958
+  - Physical Address (to device): 0x27b958
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001febe7
+  - Physical Address (to device): 0x27bbe7
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe79f
+  - Physical Address (to device): 0x27b79f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe6c8
+  - Physical Address (to device): 0x27b6c8
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe7a7
+  - Physical Address (to device): 0x27b7a7
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe50f
+  - Physical Address (to device): 0x27b50f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe6b8
+  - Physical Address (to device): 0x27b6b8
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe7a7
+  - Physical Address (to device): 0x27b7a7
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe4ff
+  - Physical Address (to device): 0x27b4ff
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe588
+  - Physical Address (to device): 0x27b588
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe696
+  - Physical Address (to device): 0x27b696
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe3cf
+  - Physical Address (to device): 0x27b3cf
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe578
+  - Physical Address (to device): 0x27b578
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe696
+  - Physical Address (to device): 0x27b696
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe3bf
+  - Physical Address (to device): 0x27b3bf
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe948
+  - Physical Address (to device): 0x27b948
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001febe7
+  - Physical Address (to device): 0x27bbe7
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe78f
+  - Physical Address (to device): 0x27b78f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[FS] Created file 'hello.txt' with inode #1
+File created with handle FileHandler(1)
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe408
+  - Physical Address (to device): 0x27b408
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe507
+  - Physical Address (to device): 0x27b507
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe24f
+  - Physical Address (to device): 0x27b24f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe958
+  - Physical Address (to device): 0x27b958
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001febe7
+  - Physical Address (to device): 0x27bbe7
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x100001fe79f
+  - Physical Address (to device): 0x27b79f
+[SHARE] Translating buffer address for device:
+  - Virtual Address (from CPU): 0x444444440000
+  - Physical Address (to device): 0x27f000
+[FS] Correctly failed to create existing file: Corrupt
+[DMA] Warning: Leaking DMA memory at paddr=0x29d000, pages=1
+[DMA] Warning: Leaking DMA memory at paddr=0x29e000, pages=1
 async number: 69
