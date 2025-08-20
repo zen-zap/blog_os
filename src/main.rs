@@ -37,7 +37,7 @@ extern crate alloc;
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-	println!("Hello zen-zap{}", "!");
+	println!("Hello zen-zap!");
 
 	println!("[INFO] Boot Info Received:");
 	println!("  - Physical Memory Offset: {:#x}", boot_info.physical_memory_offset);
@@ -103,30 +103,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 		// 3. The data is now in the buffer.
 		println!("[VirtIO] Successfully read block 0! (First 16 bytes: {:02x?})", &buffer[0..16]);
 
-		// Test write then read
-		println!("[VirtIO] Testing write/read...");
-
-		let test_data = b"hello world! this is a test message from blog_os kernel!";
-		let mut write_buffer = [0u8; 512];
-		write_buffer[..test_data.len()].copy_from_slice(test_data);
-
-		println!("[VirtIO] Writing test data to block 0...");
-		blk_dev.write_blocks(0, &write_buffer).expect("write_blocks failed");
-
-		let mut read_buffer = [0u8; 512];
-		println!("[VirtIO] Reading back from block 0...");
-		blk_dev.read_blocks(0, &mut read_buffer).expect("read_blocks failed");
-
-		println!(
-			"[VirtIO] Read back: '{}'",
-			core::str::from_utf8(&read_buffer[..test_data.len()]).unwrap_or("invalid utf8")
-		);
-
-		if read_buffer[..test_data.len()] == write_buffer[..test_data.len()] {
-			println!("[VirtIO] Write/Read test PASSED!");
-		} else {
-			println!("[VirtIO] Write/Read test FAILED!");
-		}
+		// Removed the tests on the blocks here since they corrupted the superblock
 
 		println!("[SFS] Initializing...");
 
