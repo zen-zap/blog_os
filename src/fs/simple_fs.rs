@@ -3,6 +3,7 @@
 use super::{block_dev::BlockDevice, layout::*};
 use crate::fs::layout::FileType::File;
 use crate::println;
+use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
 use core::convert::TryFrom;
 use core::ptr::write;
@@ -70,11 +71,14 @@ impl<D: BlockDevice> SFS<D> {
 
 	/// Mounts an existing file system from a block device
 	pub fn mount(mut device: D) -> Result<Self, FileSystemError> {
+		println!("[FS] Mounting File System");
 		let mut buffer = [0u8; BLOCK_SIZE];
 
 		device
 			.read_blocks(SUPERBLOCK_BLOCK, &mut buffer)
 			.map_err(|_| FileSystemError::InvalidSuperBlock);
+
+		println!("[FS] Read into buffer {:?}", buffer);
 
 		let size = size_of::<DiskSuperBlock>();
 		let disk_superblock = DiskSuperBlock::ref_from_bytes(&buffer[..size])
@@ -84,6 +88,7 @@ impl<D: BlockDevice> SFS<D> {
 			.map_err(|_| FileSystemError::InvalidSuperBlock)?;
 
 		if superblock.magic_number != MAGIC_NUMBER {
+			println!("[FS] Superblock magic number match failed");
 			return Err(FileSystemError::InvalidSuperBlock);
 		}
 
@@ -361,12 +366,14 @@ impl<D: BlockDevice> SFS<D> {
 			if is_used {
 				let entry_name_len = entry.name_len.get() as usize;
 				if &entry.name[..entry_name_len] == name.as_bytes() {
+					println!("[FS] File with same name found");
 					return Err(FileSystemError::CorruptLayout); // use FileError::FileExists at call site
 				}
 			} else if empty_slot_index.is_none() {
 				empty_slot_index = Some(i);
 			}
 		}
+
 		let slot_index = empty_slot_index.ok_or(FileSystemError::NoSpace)?;
 
 		// Allocate inode and write it
@@ -394,6 +401,101 @@ impl<D: BlockDevice> SFS<D> {
 			.map_err(|_| FileSystemError::BlockError)?;
 
 		Ok((inode_index, dir_block))
+	}
+
+	// free helpers
+	fn free_inode(
+		&mut self,
+		inode_index: u64,
+	) -> Result<(), FileSystemError> {
+		let mut buffer = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(INODE_BITMAP_BLOCK, &mut buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
+		{
+			// clear the bit in inode bitmap block using bitmap
+			let mut bm = Bitmap::new(&mut buffer);
+			bm.clear(inode_index as usize);
+		}
+
+		self.device
+			.write_blocks(INODE_BITMAP_BLOCK, &mut buffer)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		// now that we have removed the inode bitmap in its table
+		// we need to remove the inode now
+		// this is the entire block
+		let in_block =
+			self.superblock.inode_table_start_block + (inode_index / INODES_PER_BLOCK as u64);
+		// this is location of the specific inode entry we have to clear
+		let offset = (inode_index % INODES_PER_BLOCK as u64) as usize * INODE_SIZE;
+
+		let mut in_buf = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(in_block, &mut in_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+		for b in &mut in_buf[offset..offset + INODE_SIZE] {
+			*b = 0; // zero out the bits in this specific inode
+		}
+		self.device
+			.write_blocks(in_block, &in_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		Ok(())
+	}
+
+	fn free_data_block(
+		&mut self,
+		abs_block: u64,
+	) -> Result<(), FileSystemError> {
+		// abs block is the absolute block index
+		if abs_block < self.superblock.data_block_start {
+			return Ok(());
+		}
+		// get the relative data block from the data block start
+		let rel = abs_block - self.superblock.data_block_start;
+		let mut buf = [0u8; BLOCK_SIZE]; // to read the block into
+		self.device
+			.read_blocks(DATA_BITMAP_BLOCK, &mut buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+		{
+			let mut bmp = Bitmap::new(&mut buf);
+			bmp.clear(rel as usize);
+		}
+		self.device
+			.write_blocks(DATA_BITMAP_BLOCK, &buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		Ok(())
+	}
+
+	fn find_root_entry(
+		&mut self,
+		name: &str,
+	) -> Result<(usize, u64 /*inode*/, [u8; BLOCK_SIZE], u64 /*dir block*/), FileSystemError> {
+		let root_inode = self.read_inode(0)?;
+		let blk = root_inode.direct_pointers[0];
+		if blk == 0 {
+			return Err(FileSystemError::CorruptLayout);
+		}
+
+		let mut dir_block = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(blk, &mut dir_block)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		let entries = DirEntryBlock::new(&dir_block);
+		for (i, e) in entries.enumerate() {
+			let used = (e.flags.get() & DIRENT_USED) != 0;
+			if used {
+				let nlen = e.name_len.get() as usize;
+				if &e.name[..nlen] == name.as_bytes() {
+					return Ok((i, e.inode.get(), dir_block, blk));
+				}
+			}
+		}
+
+		Err(FileSystemError::CorruptLayout)
 	}
 }
 
@@ -461,17 +563,74 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		&mut self,
 		name: &str,
 	) -> Result<(), FileError> {
-		todo!()
+		if name.is_empty() {
+			return Err(FileError::InvalidName);
+		}
+		let (slot, inode_idx, mut dir_block, dir_blk) =
+			self.find_root_entry(name).map_err(|_| FileError::FileNotFound)?;
+
+		if inode_idx == 0 {
+			return Err(FileError::FileNotFound);
+		}
+
+		let inode = self.read_inode(inode_idx).map_err(|_| FileError::Corrupt)?;
+		for &dp in &inode.direct_pointers {
+			if dp != 0 {
+				self.free_data_block(dp).map_err(|_| FileError::Corrupt)?;
+			}
+		}
+
+		// free the inode
+		self.free_inode(inode_idx).map_err(|_| FileError::Corrupt)?;
+
+		// clearing the directory entries here
+		let start = slot * DIR_ENTRY_SIZE;
+		for b in &mut dir_block[start..start + DIR_ENTRY_SIZE] {
+			*b = 0;
+		}
+
+		self.device
+			.write_blocks(dir_blk, &dir_block)
+			.map_err(|_| FileError::BlockWriteError)?;
+
+		println!("[FS] Deleted file '{}' (inode #{})", name, inode_idx);
+		Ok(())
 	}
 
 	fn open_file(
 		&mut self,
 		name: &str,
 	) -> Result<FileHandler, FileError> {
-		todo!()
+		let (_, inode_idx, _, _) =
+			self.find_root_entry(name).map_err(|_| FileError::FileNotFound)?;
+
+		Ok(FileHandler(inode_idx as usize))
 	}
 
 	fn list_file(&mut self) -> Result<Vec<String>, FileError> {
-		todo!()
+		let root = self.read_inode(0).map_err(|_| FileError::Corrupt)?;
+		let block = root.direct_pointers[0];
+		if block == 0 {
+			return Err(FileError::Corrupt);
+		}
+
+		let mut buf = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(block, &mut buf)
+			.map_err(|_| FileError::BlockReadError)?;
+		let mut res = Vec::new();
+		let entries = DirEntryBlock::new(&buf);
+		for e in entries {
+			let used = (e.flags.get() & DIRENT_USED) != 0;
+			if used && e.inode.get() != 0 {
+				let nlen = e.name_len.get() as usize;
+				let name_slice = &e.name[..nlen];
+				if let Ok(s) = core::str::from_utf8(name_slice) {
+					res.push(s.to_string());
+				}
+			}
+		}
+
+		Ok(res)
 	}
 }

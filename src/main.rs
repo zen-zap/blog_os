@@ -63,6 +63,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	}
 
 	let mut mapper = unsafe { memory::init(phys_mem_offset) };
+	// get the physical frames that you wanna map
 	let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
 	*FRAME_ALLOCATOR.lock() = Some(frame_allocator);
@@ -71,7 +72,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	{
 		let mut mapper_lock = PAGE_MAPPER.lock();
 		let mut allocator_lock = FRAME_ALLOCATOR.lock();
-
+		// here we do the mapping of the physical frames
 		allocator::init_heap(mapper_lock.as_mut().unwrap(), allocator_lock.as_mut().unwrap())
 			.expect("heap initialization failed!");
 	}
@@ -133,15 +134,24 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 		};
 
 		println!("[SFS] Testing File creation..");
+		println!(
+			"[SFS] Both of them will show as corrupt since they would find the same file \
+		name again on subsequent boots if everything works correctly"
+		);
 		match fs.create_file("hello.txt") {
 			Ok(handle) => println!("File created with handle {:?}", handle),
-			Err(e) => println!("Failed to create file: {:?}", e),
+			Err(e) => println!("Failed to create file: {:#?} -- Ignore if disk not formatted", e),
 		}
 
 		// You can try creating it again to test the "FileExists" error path
 		match fs.create_file("hello.txt") {
 			Ok(_) => println!("[FS] This should not happen!"),
-			Err(e) => println!("[FS] Correctly failed to create existing file: {:?}", e),
+			Err(e) => println!("[FS] Correctly failed to create existing file: {:#?}", e),
+		}
+
+		match fs.delete_file("hello.txt") {
+			Ok(_) => println!("[SFS] Deleted hello.txt"),
+			Err(e) => println!("[FS] Failed to delete hello.txt : {:#?}", e),
 		}
 	} else {
 		println!("[PCI] No VirtIO block device found.");
