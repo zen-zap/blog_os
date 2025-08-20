@@ -135,5 +135,7 @@ use linked_list::LinkedListAllocator;
 
 use fixed_size_block::FixedSizeBlockAllocator;
 
+/// This is the heap allocator for managing the heap memory.
+/// Heap memory is separately allocated a contiguous region of the virtual memory
 #[global_allocator]
 static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());

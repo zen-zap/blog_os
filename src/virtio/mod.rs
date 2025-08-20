@@ -4,11 +4,12 @@ pub mod pci;
 
 use crate::memory::BootInfoFrameAllocator;
 use crate::println;
+use alloc::vec::Vec;
 use core::ptr::NonNull;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use virtio_drivers::{BufferDirection, Hal};
-use x86_64::structures::paging::{Mapper, Page, PageTableFlags};
+use x86_64::structures::paging::{Mapper, Page, PageTableFlags, PhysFrame};
 use x86_64::{
 	PhysAddr, VirtAddr,
 	structures::paging::{FrameAllocator, OffsetPageTable},
@@ -19,6 +20,7 @@ use x86_64::{
 lazy_static! {
 	pub static ref FRAME_ALLOCATOR: Mutex<Option<BootInfoFrameAllocator>> = Mutex::new(None);
 	pub static ref PAGE_MAPPER: Mutex<Option<OffsetPageTable<'static>>> = Mutex::new(None);
+	static ref DMA_FREE_LIST: Mutex<Vec<PhysFrame>> = Mutex::new(Vec::new());
 }
 
 pub struct OsHal;
@@ -30,21 +32,40 @@ unsafe impl Hal for OsHal {
 		pages: usize,
 		_direction: BufferDirection,
 	) -> (virtio_drivers::PhysAddr, NonNull<u8>) {
+		println!("[DMA] Single Page DMA allocation");
+
 		if pages > 1 {
+			println!("Single Page buffers only supported");
 			panic!("dma_alloc: multipage contiguous allocation not supported yet");
+		}
+
+		// before allocating .. try using any returned physical frames
+		if let Some(frame) = DMA_FREE_LIST.lock().pop() {
+			// this frame was in use earlier .. so it contains the old data
+			// but here we have the liberty to safely overwrite the data in the frame
+			let paddr = frame.start_address();
+			let vaddr = VirtAddr::new(paddr.as_u64() + unsafe { PHYSICAL_MEMORY_OFFSET });
+			println!("[DMA] Reusing returned frame:");
+			println!("  - Physical Address (for device): {:#x}", paddr);
+			println!("  - Virtual Address (for CPU):  {:#x}", vaddr);
+
+			return (paddr.as_u64() as usize, NonNull::new(vaddr.as_mut_ptr()).unwrap());
 		}
 
 		let mut frame_allocator_lock = FRAME_ALLOCATOR.lock();
 		let allocator = frame_allocator_lock.as_mut().expect("Frame allocator not initialized");
 
 		// 1. Allocate a physical frame.
-		let frame = allocator.allocate_frame().expect("Failed to allocate frame for DMA");
+		let frame = allocator
+			.allocate_frame()
+			.expect("Failed to allocate frame for DMA -- Out of physical frames");
+
 		let paddr = frame.start_address();
 
 		// 2. Calculate its virtual address in the higher-half mapping.
 		let vaddr = VirtAddr::new(paddr.as_u64() + unsafe { PHYSICAL_MEMORY_OFFSET });
 
-		println!("[DMA] Allocating DMA buffer ({} pages):", pages);
+		println!("[DMA] Allocating fresh frame ({} pages):", pages);
 		println!("  - Physical Address (for device): {:#x}", paddr);
 		println!("  - Virtual Address (for CPU):  {:#x}", vaddr);
 
@@ -60,9 +81,23 @@ unsafe impl Hal for OsHal {
 		vaddr: NonNull<u8>,
 		pages: usize,
 	) -> i32 {
-		println!("[DMA] Warning: Leaking DMA memory at paddr={:#x}, pages={}", paddr, pages);
+		//println!("[DMA] Warning: Leaking DMA memory at paddr={:#x}, pages={}", paddr, pages);
 
-		// TODO: Currently leaking memory, add logic for deallocation of the frame
+		if pages != 1 {
+			println!("[DMA] Dealloc ignored: pages={} (supported for pages < 1)", pages);
+			return 0;
+		}
+
+		let frame = PhysFrame::containing_address(PhysAddr::new(paddr as u64));
+		DMA_FREE_LIST.lock().push(frame);
+		println!(
+			"[DMA] Returned frame paddr={:#x} to free list (len={})",
+			frame.start_address(),
+			DMA_FREE_LIST.lock().len()
+		);
+
+		// no need to unmap the frame here .. we can just use this frame again later on
+
 		0
 	}
 
