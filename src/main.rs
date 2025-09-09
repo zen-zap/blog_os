@@ -9,11 +9,25 @@ use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use blog_os::fs::simple_fs::{FileSystem, FileSystemError, SFS};
 use blog_os::{
 	allocator,
+	debug,
+	debug_if,
+	error,
+	fs_debug,
+	info,
 	interrupts::InterruptIndex::Keyboard,
 	memory::{self, BootInfoFrameAllocator, translate_addr},
-	print, println,
+	memory_debug,
+	pci_debug,
+	print,
+	println,
 	task::{Task, executor::Executor, keyboard, simple_executor::SimpleExecutor},
+	// Import all tracing macros
+	trace,
+	trace_function,
+	trace_here,
 	virtio::{FRAME_ALLOCATOR, OsHal, PAGE_MAPPER, pci, pci::PciConfigIo},
+	virtio_debug,
+	warn,
 };
 use bootloader::{BootInfo, entry_point};
 use core::{arch::asm, panic::PanicInfo};
@@ -37,13 +51,13 @@ extern crate alloc;
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-	println!("Hello zen-zap!");
+	info!("Kernel starting up...");
 
-	println!("[INFO] Boot Info Received:");
-	println!("  - Physical Memory Offset: {:#x}", boot_info.physical_memory_offset);
-	println!("  - Memory Map:");
+	info!("Boot Info Received:");
+	info!("  - Physical Memory Offset: {:#x}", boot_info.physical_memory_offset);
+	debug!("  - Memory Map:");
 	for region in boot_info.memory_map.iter() {
-		println!(
+		debug!(
 			"    - Start: {:#010x}, End: {:#010x}, Size: {} KB, Type: {:?}",
 			region.range.start_addr(),
 			region.range.end_addr(),
@@ -51,9 +65,10 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			region.region_type
 		);
 	}
-	println!("=================");
+	info!("=================");
 
 	blog_os::init(); // for the exception things
+	memory_debug!("Initializing memory subsystem...");
 
 	let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
 
@@ -61,10 +76,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	unsafe {
 		blog_os::virtio::PHYSICAL_MEMORY_OFFSET = boot_info.physical_memory_offset;
 	}
+	virtio_debug!("Set physical memory offset: {:#x}", boot_info.physical_memory_offset);
 
 	let mut mapper = unsafe { memory::init(phys_mem_offset) };
 	// get the physical frames that you wanna map
 	let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
+	memory_debug!("Initialized frame allocator and page mapper");
 
 	*FRAME_ALLOCATOR.lock() = Some(frame_allocator);
 	*PAGE_MAPPER.lock() = Some(mapper);
@@ -76,8 +93,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 		allocator::init_heap(mapper_lock.as_mut().unwrap(), allocator_lock.as_mut().unwrap())
 			.expect("heap initialization failed!");
 	}
+	memory_debug!("Heap initialization completed");
 
-	println!("[PCI] Initializing PCI and finding devices");
+	info!("Initializing PCI and finding devices");
 	let pci_config_access = PciConfigIo;
 	let mut pci_root = PciRoot::new(pci_config_access);
 
@@ -86,35 +104,35 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 		let transport = PciTransport::new::<OsHal, _>(&mut pci_root_mut, device_function)
 			.expect("Failed to create PCI transport");
 
-		println!("[VirtIO] PCI transport created successfully.");
+		info!("PCI transport created successfully");
 
 		let mut blk_dev =
 			VirtIOBlk::<OsHal, _>::new(transport).expect("failed to create blk driver");
 
-		println!("[VirtIO] Block Device Initialized! Capacity: {} sectors", blk_dev.capacity());
+		info!("Block Device Initialized! Capacity: {} sectors", blk_dev.capacity());
 
 		// 1. Create a buffer for one sector (512 bytes).
 		let mut buffer = [0u8; 512];
 
 		// 2. Call the simple, blocking read_blocks method.
 		// This function will not return until the read is complete.
-		println!("[VirtIO] Reading block 0...");
+		virtio_debug!("Reading block 0...");
 		blk_dev.read_blocks(0, &mut buffer).expect("read_blocks failed");
 
 		// 3. The data is now in the buffer.
-		println!("[VirtIO] Successfully read block 0! (First 16 bytes: {:02x?})", &buffer[0..16]);
+		virtio_debug!("Successfully read block 0! (First 16 bytes: {:02x?})", &buffer[0..16]);
 
 		// Removed the tests on the blocks here since they corrupted the superblock
 
-		println!("[SFS] Initializing...");
+		info!("Initializing Simple File System...");
 
 		let mut fs = match SFS::mount(blk_dev) {
 			Ok(fs) => {
-				println!("[SFS] Filesystem mounted successfully");
+				info!("Filesystem mounted successfully");
 				fs
 			},
 			Err(_) => {
-				println!("[SFS] Mount failed or filesystem not found! Formatting disk...");
+				warn!("Mount failed or filesystem not found! Formatting disk...");
 
 				// We need to re-create the block device
 				let mut pci_root_for_format = PciRoot::new(pci_config_access);
@@ -133,28 +151,30 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			},
 		};
 
-		println!("[SFS] Testing File creation..");
-		println!(
-			"[SFS] Both of them will show as corrupt since they would find the same file \
-		name again on subsequent boots if everything works correctly"
+		fs_debug!("Testing File creation...");
+		fs_debug!(
+			"Both operations will show appropriate behavior since they test file \
+		creation and duplicate detection on subsequent boots"
 		);
 		match fs.create_file("hello.txt") {
-			Ok(handle) => println!("File created with handle {:?}", handle),
-			Err(e) => println!("Failed to create file: {:#?} -- Ignore if disk not formatted", e),
+			Ok(handle) => info!("File created with handle {:?}", handle),
+			Err(e) => warn!("Failed to create file: {:#?} -- Ignore if disk not formatted", e),
 		}
 
 		// You can try creating it again to test the "FileExists" error path
 		match fs.create_file("hello.txt") {
-			Ok(_) => println!("[FS] This should not happen!"),
-			Err(e) => println!("[FS] Correctly failed to create existing file: {:#?}", e),
+			Ok(_) => error!("This should not happen - duplicate file created!"),
+			Err(e) => {
+				fs_debug!("Correctly failed to create existing file: {:#?}", e);
+			},
 		}
 
 		match fs.delete_file("hello.txt") {
-			Ok(_) => println!("[SFS] Deleted hello.txt"),
-			Err(e) => println!("[FS] Failed to delete hello.txt : {:#?}", e),
+			Ok(_) => info!("Deleted hello.txt successfully"),
+			Err(e) => warn!("Failed to delete hello.txt : {:#?}", e),
 		}
 	} else {
-		println!("[PCI] No VirtIO block device found.");
+		error!("No VirtIO block device found!");
 	}
 
 	let mut executor = Executor::new();
@@ -166,7 +186,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	#[cfg(test)]
 	test_main();
 
-	println!("It did not crash!");
+	debug!("Kernel initialization complete - starting task executor");
 	blog_os::hlt_loop();
 }
 
@@ -174,7 +194,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	println!("KERNEL PANIC: {}\n", info);
+	error!("KERNEL PANIC: {}\n", info);
 
 	// reading RIP [current instruction pointer]
 	let rip: u64;
@@ -186,10 +206,10 @@ fn panic(info: &PanicInfo) -> ! {
 		);
 	}
 
-	println!("RIP: {:#018x}", rip);
+	error!("RIP: {:#018x}", rip);
 
 	// stack backtrace
-	println!("\nStack Backtrace:");
+	error!("\nStack Backtrace:");
 	let mut rbp: u64;
 	unsafe {
 		asm!(
@@ -204,7 +224,7 @@ fn panic(info: &PanicInfo) -> ! {
 	while rbp != 0 && stack_trace_count < 20 {
 		// return address is saved at [RBP + 8]
 		let ret = unsafe { *((rbp + 8) as *const u64) };
-		println!("  {:#018x}", ret);
+		error!("  {:#018x}", ret);
 		// the previous frame's RBP is at [RBP]
 		rbp = unsafe { *(rbp as *const u64) };
 
@@ -232,5 +252,5 @@ async fn async_number_69() -> u32 {
 
 async fn example_task() {
 	let number = async_number_69().await;
-	println!("async number: {}", number);
+	debug!("async number: {}", number);
 }

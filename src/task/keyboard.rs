@@ -7,7 +7,7 @@ use crossbeam_queue::ArrayQueue;
 /// Used to store the tasks from the Interrupt Handler
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 
-use crate::println;
+use crate::{warn, debug};
 
 /// Called by the keyboard interrupt handler
 ///
@@ -19,14 +19,14 @@ pub(crate) fn add_scancode(scancode: u8) {
 	// get a reference to the initialized queue
 	if let Ok(queue) = SCANCODE_QUEUE.try_get() {
 		if let Err(_) = queue.push(scancode) {
-			println!("WARNING: SCANCODE_QUEUE full; dropping keyboard input");
+			warn!("SCANCODE_QUEUE full; dropping keyboard input");
 		} else {
 			// you get an input, you wake up the SCANCODE_WAKER
 			SCANCODE_WAKER.wake();
 			// the waker in turn notifies the executor
 		}
 	} else {
-		println!("WARNING: scancode queue uninitialized!");
+		warn!("scancode queue uninitialized!");
 	}
 }
 

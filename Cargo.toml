@@ -48,6 +48,15 @@ test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "st
 test-success-exit-code = 33  # (0x10 << 1) | 1
 test-timeout = 200 # (in seconds)  -- timeout for each test executable .. if exceeds ..test marked as failed / "Timed Out"
 
+[features]
+default = []
+# Debug feature flags for conditional compilation
+debug-fs = []
+debug-virtio = []
+debug-memory = []
+debug-hardware = []
+trace-all = ["debug-fs", "debug-virtio", "debug-memory", "debug-hardware"]
+
 [[test]]
 name = "should_panic"
 harness = true # defines whether we should use a test runner for our integration tests .. name specified obv

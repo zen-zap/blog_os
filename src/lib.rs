@@ -17,6 +17,7 @@ pub mod memory;
 pub mod scanc;
 pub mod serial;
 pub mod task;
+pub mod tracing;  // Add tracing module
 pub mod vga_buffer;
 pub mod virtio;
 

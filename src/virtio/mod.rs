@@ -3,7 +3,7 @@
 pub mod pci;
 
 use crate::memory::BootInfoFrameAllocator;
-use crate::println;
+use crate::{debug, error, virtio_debug, warn};
 use alloc::vec::Vec;
 use core::ptr::NonNull;
 use lazy_static::lazy_static;
@@ -32,10 +32,10 @@ unsafe impl Hal for OsHal {
 		pages: usize,
 		_direction: BufferDirection,
 	) -> (virtio_drivers::PhysAddr, NonNull<u8>) {
-		println!("[DMA] Single Page DMA allocation");
+		virtio_debug!("Allocating DMA buffer ({} pages)", pages);
 
 		if pages > 1 {
-			println!("Single Page buffers only supported");
+			warn!("Single page buffers only supported");
 			panic!("dma_alloc: multipage contiguous allocation not supported yet");
 		}
 
@@ -45,9 +45,9 @@ unsafe impl Hal for OsHal {
 			// but here we have the liberty to safely overwrite the data in the frame
 			let paddr = frame.start_address();
 			let vaddr = VirtAddr::new(paddr.as_u64() + unsafe { PHYSICAL_MEMORY_OFFSET });
-			println!("[DMA] Reusing returned frame:");
-			println!("  - Physical Address (for device): {:#x}", paddr);
-			println!("  - Virtual Address (for CPU):  {:#x}", vaddr);
+			virtio_debug!("Reusing returned frame:");
+			virtio_debug!("  - Physical Address (for device): {:#x}", paddr);
+			virtio_debug!("  - Virtual Address (for CPU):  {:#x}", vaddr);
 
 			return (paddr.as_u64() as usize, NonNull::new(vaddr.as_mut_ptr()).unwrap());
 		}
@@ -65,9 +65,9 @@ unsafe impl Hal for OsHal {
 		// 2. Calculate its virtual address in the higher-half mapping.
 		let vaddr = VirtAddr::new(paddr.as_u64() + unsafe { PHYSICAL_MEMORY_OFFSET });
 
-		println!("[DMA] Allocating fresh frame ({} pages):", pages);
-		println!("  - Physical Address (for device): {:#x}", paddr);
-		println!("  - Virtual Address (for CPU):  {:#x}", vaddr);
+		virtio_debug!("Allocating DMA buffer ({} pages):", pages);
+		virtio_debug!("  - Physical Address (for device): {:#x}", paddr);
+		virtio_debug!("  - Virtual Address (for CPU):  {:#x}", vaddr);
 
 		// NO MAPPING IS NEEDED. The bootloader's huge page mapping already covers this.
 		// Here, there is no work with Pages. The Frame is an actual block of physical memory --
@@ -81,17 +81,15 @@ unsafe impl Hal for OsHal {
 		vaddr: NonNull<u8>,
 		pages: usize,
 	) -> i32 {
-		//println!("[DMA] Warning: Leaking DMA memory at paddr={:#x}, pages={}", paddr, pages);
-
 		if pages != 1 {
-			println!("[DMA] Dealloc ignored: pages={} (supported for pages < 1)", pages);
+			debug!("Dealloc ignored: pages={} (only single pages supported)", pages);
 			return 0;
 		}
 
 		let frame = PhysFrame::containing_address(PhysAddr::new(paddr as u64));
 		DMA_FREE_LIST.lock().push(frame);
-		println!(
-			"[DMA] Returned frame paddr={:#x} to free list (len={})",
+		virtio_debug!(
+			"Returned frame paddr={:#x} to free list (len={})",
 			frame.start_address(),
 			DMA_FREE_LIST.lock().len()
 		);
@@ -110,10 +108,10 @@ unsafe impl Hal for OsHal {
 		let paddr = PhysAddr::new(paddr as u64);
 		let vaddr = VirtAddr::new(paddr.as_u64() + PHYSICAL_MEMORY_OFFSET);
 
-		println!("[MMAP] Mapping device MMIO region:");
-		println!("  - Physical Address: {:#x}", paddr);
-		println!("  - Virtual Address:  {:#x}", vaddr);
-		println!("  - Size: {} bytes", size);
+		virtio_debug!("Mapping device MMIO region:");
+		virtio_debug!("  - Physical Address: {:#x}", paddr);
+		virtio_debug!("  - Virtual Address:  {:#x}", vaddr);
+		virtio_debug!("  - Size: {} bytes", size);
 
 		// For MMIO regions, the bootloader should have already set up appropriate mappings
 		// We just return the virtual address
@@ -134,9 +132,9 @@ unsafe impl Hal for OsHal {
 		let phyaddr = crate::memory::translate_addr(vaddr, offset)
 			.expect("Failed to translate virtual address for sharing");
 
-		println!("[SHARE] Translating buffer address for device:");
-		println!("  - Virtual Address (from CPU): {:#x}", vaddr);
-		println!("  - Physical Address (to device): {:#x}", phyaddr);
+		virtio_debug!("Translating buffer address for device:");
+		virtio_debug!("  - Virtual Address (from CPU): {:#x}", vaddr);
+		virtio_debug!("  - Physical Address (to device): {:#x}", phyaddr);
 
 		phyaddr.as_u64() as usize
 	}

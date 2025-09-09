@@ -1,5 +1,5 @@
 use super::simple_fs::FileSystemError;
-use crate::println;
+use crate::{error, warn};
 use crate::virtio::OsHal;
 use virtio_drivers::{device::blk::VirtIOBlk, transport::pci::PciTransport};
 
@@ -44,7 +44,7 @@ impl BlockDevice for VirtIOBlk<OsHal, PciTransport> {
 		buffer: &mut [u8],
 	) -> Result<(), FileSystemError> {
 		self.read_blocks(start_block_id as usize, buffer).map_err(|e| {
-			println!("[BLOCK DEVICE] Read Error: {}", e);
+			error!("[BLOCK DEVICE] Read Error: {}", e);
 			FileSystemError::BlockError
 		})
 	}
@@ -55,7 +55,7 @@ impl BlockDevice for VirtIOBlk<OsHal, PciTransport> {
 		buffer: &[u8],
 	) -> Result<(), FileSystemError> {
 		self.write_blocks(start_block_id as usize, buffer).map_err(|e| {
-			println!("[BLOCK DEVICE] Write Error: {}", e);
+			error!("[BLOCK DEVICE] Write Error: {}", e);
 			FileSystemError::BlockError
 		})
 	}

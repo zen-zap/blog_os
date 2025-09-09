@@ -113,7 +113,7 @@ pub struct EmptyFrameAllocator;
 
 unsafe impl FrameAllocator<Size4KiB> for EmptyFrameAllocator {
 	/// inside an unsafe impl because the implementor must guarantee that the allocator always
-	/// yeilds only unused frames
+	/// yields only unused frames
 	fn allocate_frame(&mut self) -> Option<PhysFrame> {
 		None
 	}

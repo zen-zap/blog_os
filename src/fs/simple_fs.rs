@@ -29,7 +29,9 @@ impl<D: BlockDevice> SFS<D> {
 		println!("[FS] Formatting Device");
 
 		let capacity: u64 = device.capacity() as u64;
-
+		if capacity < 100 {
+			return Err(FileSystemError::FormatFailed);
+		}
 		let inode_table_blocks = capacity / 10; // 10% of the total capacity goes to the INODE_TABLE
 		let inode_count = inode_table_blocks * INODES_PER_BLOCK as u64;
 
@@ -76,7 +78,7 @@ impl<D: BlockDevice> SFS<D> {
 
 		device
 			.read_blocks(SUPERBLOCK_BLOCK, &mut buffer)
-			.map_err(|_| FileSystemError::InvalidSuperBlock);
+			.map_err(|_| FileSystemError::InvalidSuperBlock)?;
 
 		println!("[FS] Read into buffer {:?}", buffer);
 
@@ -89,6 +91,25 @@ impl<D: BlockDevice> SFS<D> {
 
 		if superblock.magic_number != MAGIC_NUMBER {
 			println!("[FS] Superblock magic number match failed");
+			return Err(FileSystemError::InvalidSuperBlock);
+		}
+
+		// basic sanity checks so that we stay in range
+		if superblock.inode_count % (INODES_PER_BLOCK as u64) != 0 {
+			return Err(FileSystemError::InvalidSuperBlock);
+		}
+		if superblock.inode_table_start_block != INODE_TABLE_START_BLOCK {
+			return Err(FileSystemError::InvalidSuperBlock);
+		}
+		if superblock.inode_bitmap_block != INODE_BITMAP_BLOCK
+			|| superblock.data_bitmap_block != DATA_BITMAP_BLOCK
+		{
+			return Err(FileSystemError::InvalidSuperBlock);
+		}
+		if superblock.data_block_start <= superblock.inode_table_start_block {
+			return Err(FileSystemError::InvalidSuperBlock);
+		}
+		if superblock.data_block_start + superblock.data_block_count > superblock.total_blocks {
 			return Err(FileSystemError::InvalidSuperBlock);
 		}
 
@@ -111,6 +132,10 @@ impl<D: BlockDevice> SFS<D> {
 		// here we're working a reference of the bitmap_buffer -- so it is still valid and can be
 		// passed as the buffer to the write_blocks
 
+		if free_inode_index >= self.superblock.inode_count as usize {
+			// out of bounds index is allocated .. not gonna work
+			return Err(FileSystemError::NoSpace);
+		}
 		// so the write_blocks of the BlockDevice should be able to overwrite the contents of the
 		// block if any exists
 		self.device
@@ -132,11 +157,22 @@ impl<D: BlockDevice> SFS<D> {
 
 		let free_idx = data_bitmap.find_and_set_first_free().ok_or(FileSystemError::NoSpace)?;
 
+		if free_idx >= self.superblock.data_block_count as usize {
+			return Err(FileSystemError::NoSpace);
+		}
+
 		self.device
 			.write_blocks(DATA_BITMAP_BLOCK, &bm_buffer)
 			.map_err(|_| FileSystemError::BlockError)?;
 
+		// find position in the table
 		let abs_block = self.superblock.data_block_start + free_idx as u64;
+
+		// zeroing the new block to avoid stale data
+		let zero_block = [0u8; BLOCK_SIZE];
+		self.device
+			.write_blocks(abs_block, &zero_block)
+			.map_err(|_| FileSystemError::BlockError)?;
 
 		Ok(abs_block)
 	}
@@ -223,7 +259,7 @@ impl<D: BlockDevice> SFS<D> {
 			inode: U64::new(inode),
 			name_len: U16::new(name.len() as u16),
 			flags: U16::new(DIRENT_USED),
-			name: [08; DIR_NAME_MAX],
+			name: [0u8; DIR_NAME_MAX],
 		};
 
 		entry.name[..name.len()].copy_from_slice(name);
@@ -367,7 +403,8 @@ impl<D: BlockDevice> SFS<D> {
 				let entry_name_len = entry.name_len.get() as usize;
 				if &entry.name[..entry_name_len] == name.as_bytes() {
 					println!("[FS] File with same name found");
-					return Err(FileSystemError::CorruptLayout); // use FileError::FileExists at call site
+					return Err(FileSystemError::AlreadyExists); // use FileError::FileExists at
+					// call site
 				}
 			} else if empty_slot_index.is_none() {
 				empty_slot_index = Some(i);
@@ -515,6 +552,7 @@ pub enum FileError {
 	InvalidHandle,
 	InvalidName,
 	Corrupt,
+	NameTooLong,
 }
 
 pub trait FileSystem {
@@ -535,13 +573,14 @@ pub trait FileSystem {
 
 #[derive(Debug)]
 pub enum FileSystemError {
-	FormatFailed,
-	MountFailed,
+	AlreadyExists,
 	BlockError,
-	NoSpace,
-	NameTooLong,
 	CorruptLayout,
+	FormatFailed,
 	InvalidSuperBlock,
+	MountFailed,
+	NameTooLong,
+	NoSpace,
 }
 
 impl<D: BlockDevice> FileSystem for SFS<D> {
@@ -566,6 +605,10 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		if name.is_empty() {
 			return Err(FileError::InvalidName);
 		}
+		if name.len() >= DIR_NAME_MAX {
+			return Err(FileError::NameTooLong);
+		}
+
 		let (slot, inode_idx, mut dir_block, dir_blk) =
 			self.find_root_entry(name).map_err(|_| FileError::FileNotFound)?;
 
@@ -624,6 +667,9 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 			let used = (e.flags.get() & DIRENT_USED) != 0;
 			if used && e.inode.get() != 0 {
 				let nlen = e.name_len.get() as usize;
+				if nlen >= DIR_NAME_MAX {
+					return Err(FileError::NameTooLong);
+				}
 				let name_slice = &e.name[..nlen];
 				if let Ok(s) = core::str::from_utf8(name_slice) {
 					res.push(s.to_string());

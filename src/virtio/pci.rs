@@ -1,6 +1,6 @@
 // in src/virtio/pci
 
-use crate::println;
+use crate::{pci_debug, info, debug};
 use virtio_drivers::transport::pci::bus::{ConfigurationAccess, DeviceFunction, PciRoot};
 use x86_64::instructions::port::Port;
 
@@ -30,16 +30,16 @@ unsafe fn read_config_dword(
 
 /// Scans the PCI bus for a VirtIO device using the correct `enumerate_bus` method.
 pub fn scan(root: &mut PciRoot<PciConfigIo>) -> Option<DeviceFunction> {
-	println!("[PCI] Scanning for devices...");
+	info!("[PCI] Scanning for devices...");
 	for bus_num in 0..=255 {
 		for (device_func, header) in root.enumerate_bus(bus_num) {
-			println!(
-				"  - Found device on bus {}, device {} -> Vendor={:?}, Device={:?}",
+			pci_debug!(
+				"Found device on bus {}, device {} -> Vendor={:04X}, Device={:04X}",
 				bus_num, device_func.device, header.vendor_id, header.device_id
 			);
 			if header.vendor_id == 0x1AF4 {
 				// Vendor IDs assigned by RedHat
-				println!("6900 -> Found a VirtIO device!");
+				info!("Found a VirtIO device!");
 
 				// Read BAR0 to find the MMIO base address.
 				// The lower bits of the BAR value have flags, so we mask them off.
@@ -47,7 +47,7 @@ pub fn scan(root: &mut PciRoot<PciConfigIo>) -> Option<DeviceFunction> {
 					Some(bar_info) => bar_info.memory_address_size().unwrap().0 & 0xFFFFFFF0,
 					None => return None, // or handle the missing BAR as needed
 				};
-				println!("    -> Device BAR0 (MMIO Physical Address): {:#x}", bar0);*/
+				pci_debug!("Device BAR0 (MMIO Physical Address): {:#x}", bar0);*/
 				let device_function =
 					DeviceFunction { bus: bus_num, device: device_func.device, function: 0 };
 

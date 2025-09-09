@@ -3,7 +3,7 @@
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 // you can check their docs for detailed stuff
 use crate::gdt;
-use crate::{print, println};
+use crate::{print, debug, warn, error};
 
 // static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
 // the CPU will access this table on every interrupt so it needs to live until we
@@ -44,7 +44,7 @@ pub fn init_idt() {
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-	println!("EXCEPTION: BREAKPOINT\n {:#?}", stack_frame);
+	debug!("EXCEPTION: BREAKPOINT\n {:#?}", stack_frame);
 }
 
 #[allow(unused_unsafe)]
@@ -56,7 +56,7 @@ extern "x86-interrupt" fn double_fault_handler(
 	// error code for the double fault is always 0 -- so no need to print it ...
 	// display the exception stack frame
 	// panic!("EXCEPTION: DOUBLE_FAULT\n=== EXCEPTION_STACK_FRAME ===\n{:#?}", stack_frame);
-	println!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+	error!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 
 	loop {}
 }
@@ -164,11 +164,11 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
 	use x86_64::registers::control::Cr2;
 
-	println!("EXCEPTION: PAGE FAULT");
+	error!("EXCEPTION: PAGE FAULT");
 	// the cr2 register contains the accessed virtual address that caused the page fault
-	println!("Accessed Address: {:?}", Cr2::read());
-	println!("Error Code: {:?}", error_code);
-	println!("{:#?}", stack_frame);
+	error!("Accessed Address: {:?}", Cr2::read());
+	error!("Error Code: {:?}", error_code);
+	error!("{:#?}", stack_frame);
 
 	// why this? -- so that the CPU doesn't continue further execution of instructions
 	hlt_loop();
