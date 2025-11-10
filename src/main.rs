@@ -151,31 +151,89 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			},
 		};
 
-		fs_debug!("Testing File creation...");
-		fs_debug!(
-			"Both operations will show appropriate behavior since they test file \
-		creation and duplicate detection on subsequent boots"
-		);
-		match fs.create_file("hello.txt") {
-			Ok(handle) => info!("File created with handle {:?}", handle),
-			Err(e) => warn!("Failed to create file: {:#?} -- Ignore if disk not formatted", e),
+		// --- BEGIN SFS C-W-R-D TEST ---
+		info!("--- Starting SFS C-W-R-D Test ---");
+		let filename = "test.txt";
+
+		// 1. Cleanup (in case of previous failed run)
+		fs_debug!("Attempting cleanup of '{}'...", filename);
+		match fs.delete_file(filename) {
+			Ok(_) => { fs_debug!("Cleanup successful."); },
+			Err(_) => { fs_debug!("File not present, no cleanup needed."); },
 		}
 
-		// You can try creating it again to test the "FileExists" error path
-		match fs.create_file("hello.txt") {
-			Ok(_) => error!("This should not happen - duplicate file created!"),
+		// 2. Create File
+		fs_debug!("Creating '{}'...", filename);
+		let handle = match fs.create_file(filename) {
+			Ok(h) => {
+				info!("File created successfully with handle {:?}", h);
+				h
+			},
 			Err(e) => {
-				fs_debug!("Correctly failed to create existing file: {:#?}", e);
+				error!("Failed to create file: {:?}", e);
+				blog_os::hlt_loop(); // Can't continue test
+			},
+		};
+
+		// 3. Write to File (USING YOUR NEW FUNCTION)
+		let lines_to_write = &["Hello from your SFS!", "This is the second line."];
+		fs_debug!("Writing content to file...");
+		match fs.write_file_lines(handle, lines_to_write) {
+			Ok(_) => info!("Content written successfully."),
+			Err(e) => {
+				error!("Failed to write to file: {:?}", e);
+				blog_os::hlt_loop(); // Can't continue test
 			},
 		}
 
-		match fs.delete_file("hello.txt") {
-			Ok(_) => info!("Deleted hello.txt successfully"),
-			Err(e) => warn!("Failed to delete hello.txt : {:#?}", e),
+		// 4. Read from File (USING YOUR NEW FUNCTION)
+		fs_debug!("Reading content back from file...");
+		match fs.read_file(handle) {
+			Ok(content) => {
+				info!("Read success! Content:\n---\n{}\n---", content);
+
+				// Verification check
+				let expected_content = lines_to_write.join("\n");
+				if content == expected_content {
+					info!("Verification SUCCESS: Content matches!");
+				} else {
+					error!("Verification FAILED: Content mismatch!");
+				}
+			},
+			Err(e) => {
+				error!("Failed to read from file: {:?}", e);
+				blog_os::hlt_loop(); // Can't continue test
+			},
 		}
+
+		// 5. List files (to see it's there)
+		fs_debug!("Listing root directory...");
+		match fs.list_file() {
+			Ok(files) => info!("Files in root: {:?}", files),
+			Err(e) => error!("Failed to list files: {:?}", e),
+		}
+
+		// 6. Delete File
+		fs_debug!("Deleting '{}'...", filename);
+		match fs.delete_file(filename) {
+			Ok(_) => info!("File deleted successfully."),
+			Err(e) => error!("Failed to delete file: {:?}", e),
+		}
+
+		// 7. List files again (to see it's gone)
+		fs_debug!("Listing root directory after delete...");
+		match fs.list_file() {
+			Ok(files) => info!("Files in root: {:?}", files),
+			Err(e) => error!("Failed to list files: {:?}", e),
+		}
+
+		info!("--- SFS Test Complete ---");
+		// --- END SFS C-W-R-D TEST ---
 	} else {
 		error!("No VirtIO block device found!");
 	}
+
+	maybe_run_tests();
 
 	let mut executor = Executor::new();
 
@@ -183,12 +241,21 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	executor.spawn(Task::new(keyboard::print_keypresses()));
 	executor.run();
 
-	#[cfg(test)]
-	test_main();
-
 	debug!("Kernel initialization complete - starting task executor");
 	blog_os::hlt_loop();
 }
+
+#[cfg(test)]
+fn maybe_run_tests() {
+	// When running `cargo test` the harness provides `test_main`
+	// via `#![reexport_test_harness_main = "test_main"]`.
+	test_main();
+}
+
+// no op in normal boot
+#[cfg(not(test))]
+fn maybe_run_tests() {}
+
 
 /// our panic handler in general mode
 #[cfg(not(test))]
@@ -244,6 +311,12 @@ fn panic(info: &PanicInfo) -> ! {
 #[test_case]
 fn one_one_assertion() {
 	assert_eq!(1, 1);
+}
+
+#[test_case]
+fn test_interrupt_handler() {
+    // Test that breakpoint exception works
+    x86_64::instructions::interrupts::int3(); // Should not panic
 }
 
 async fn async_number_69() -> u32 {

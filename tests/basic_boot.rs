@@ -4,11 +4,10 @@
 #![no_main]
 #![feature(custom_test_frameworks)]  // to use our custom test framework
 #![test_runner(blog_os::test_runner)] // instead of reimplementing it ... take it from somewhere else
-#![reexport_test_harness_main="test_main"] // to set the main function of the test
+#![reexport_test_harness_main = "test_main"] // to set the main function of the test
 
 use core::panic::PanicInfo;
-use blog_os::println;
-
+use blog_os::{exit_qemu, QemuExitCode, serial_print, serial_println}; // -- add before any test
 
 /// all integration tests are their own executables and hence have their own entry_points
 /// 
@@ -30,7 +29,8 @@ fn panic(info: &PanicInfo) -> !
 }
 
 #[test_case]
-pub fn test_println()
-{
-    println!("println! works fine!");
+fn test_basic_boot() {
+    serial_print!("basic_boot... ");
+    // Your test code
+    serial_println!("[ok]");
 }

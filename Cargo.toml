@@ -57,6 +57,11 @@ debug-memory = []
 debug-hardware = []
 trace-all = ["debug-fs", "debug-virtio", "debug-memory", "debug-hardware"]
 
+[[bin]]
+name = "blog_os"
+path = "src/main.rs"
+test = false
+
 [[test]]
 name = "should_panic"
 harness = true # defines whether we should use a test runner for our integration tests .. name specified obv

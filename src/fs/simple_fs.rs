@@ -147,6 +147,7 @@ impl<D: BlockDevice> SFS<D> {
 
 	/// Allocates a data block following a read-modify-write pattern
 	pub fn allocate_data_block(&mut self) -> Result<u64, FileSystemError> {
+		// TODO: maybe wrap the u64 here with something similar to FileHandler .. better to have
 		let mut bm_buffer = [0u8; BLOCK_SIZE];
 
 		self.device
@@ -556,18 +557,22 @@ pub enum FileError {
 }
 
 pub trait FileSystem {
+	/// create a file in the File System
 	fn create_file(
 		&mut self,
 		name: &str,
 	) -> Result<FileHandler, FileError>;
+	/// Delete a file from the File System
 	fn delete_file(
 		&mut self,
 		name: &str,
 	) -> Result<(), FileError>;
+	/// Open a file from the file system for reading or writing
 	fn open_file(
 		&mut self,
 		name: &str,
 	) -> Result<FileHandler, FileError>;
+	/// List the available files
 	fn list_file(&mut self) -> Result<Vec<String>, FileError>;
 }
 
@@ -650,6 +655,8 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		Ok(FileHandler(inode_idx as usize))
 	}
 
+	/// since we currently follow a single directory structure, this just returns the names of
+	/// files in that directory
 	fn list_file(&mut self) -> Result<Vec<String>, FileError> {
 		let root = self.read_inode(0).map_err(|_| FileError::Corrupt)?;
 		let block = root.direct_pointers[0];
@@ -678,5 +685,82 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		}
 
 		Ok(res)
+	}
+}
+
+impl<D: BlockDevice> SFS<D> {
+	pub fn write_file_lines(
+		&mut self,
+		handle: FileHandler,
+		lines: &[&str], // reference to a string slice? -- string slice is reference right?
+	) -> Result<(), FileError> {
+		let inode_idx = handle.0 as u64;
+		let mut inode = self.read_inode(inode_idx).map_err(|_| FileError::Corrupt)?;
+		if inode.mode != FileType::File {
+			return Err(FileError::Corrupt);
+		}
+
+		// append a new line to whatever the user just added
+		let joined = lines.join("\n");
+		let bytes = joined.as_bytes();
+
+		if bytes.len() > BLOCK_SIZE {
+			return Err(FileError::NoSpace);
+			// simple check -- maybe add some proper warning here
+			// to the user when he tries to save
+		}
+
+		// check for data block allocation
+		if inode.direct_pointers[0] == 0 {
+			let b = self.allocate_data_block().map_err(|_| FileError::NoSpace)?;
+			inode.direct_pointers[0] = b;
+		}
+
+		let data_block = inode.direct_pointers[0];
+		
+		let mut buf = [0u8; BLOCK_SIZE];
+		buf[.. bytes.len()].copy_from_slice(bytes);
+		
+		// wrote into the buffer
+		// now have to write this into disk
+		self.device
+			.write_blocks(data_block, &buf)
+			.map_err(|_| FileError::BlockWriteError)?;
+
+		// we also need to update inode metadata
+		inode.size_in_bytes = bytes.len() as u64;
+		// timestamps for inode are missing
+		// not a priority but nice to have
+		self.write_inode(inode, inode_idx).map_err(|_| FileError::BlockWriteError)?;
+		Ok(())
+	}
+	
+	pub fn read_file(&mut self, handle: FileHandler) -> Result<String, FileError> {
+		let inode_idx = handle.0 as u64;
+		let inode = self.read_inode(inode_idx).map_err(|_| FileError::Corrupt)?;
+		if inode.mode != FileType::File {
+			return Err(FileError::Corrupt);
+		}
+		
+		let sz = inode.size_in_bytes as usize;
+		if sz == 0 {
+			return Ok(String::new());
+		}
+		
+		let data_block = inode.direct_pointers[0];
+		if data_block == 0 {
+			return Err(FileError::Corrupt);
+		}
+		
+		let mut buf = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(data_block, &mut buf)
+			.map_err(|_| FileError::BlockReadError)?;
+		
+		let slice = &buf[..sz];
+		let s = core::str::from_utf8(slice).map_err(|_| FileError::Corrupt)?;
+		// should I make different types of corrupt? 
+		// maybe some good verbose output for user would be better -- look for crates for this!
+		Ok(s.to_string())
 	}
 }

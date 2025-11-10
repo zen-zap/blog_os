@@ -100,7 +100,7 @@ pub struct Inode {
 	pub last_access_time: u64,
 	pub last_modification_time: u64,
 	pub creation_time: u64,
-	pub direct_pointers: [u64; 10], // direct pointers for simplicity
+	pub direct_pointers: [u64; 10], // they hold the handlers to the allocated data blocks?
 	pub indirect_pointer: u64,
 }
 

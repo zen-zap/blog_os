@@ -17,9 +17,10 @@ pub mod memory;
 pub mod scanc;
 pub mod serial;
 pub mod task;
-pub mod tracing;  // Add tracing module
+// Add tracing module
 pub mod vga_buffer;
 pub mod virtio;
+pub mod utils;
 
 extern crate alloc;
 extern crate static_assertions as sa;
@@ -100,7 +101,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 	}
 }
 
-use bootloader::{BootInfo, entry_point};
+use bootloader::{entry_point, BootInfo};
 
 #[cfg(test)]
 entry_point!(test_kernel_main);
