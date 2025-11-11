@@ -3,9 +3,9 @@ name = "blog_os"
 version = "0.1.0"
 authors = ["zen-zap"]
 edition = "2018"
+resolver = "2"
 
 [dependencies]
-bootloader = { version = "0.9", features = ["map_physical_memory"] }
 volatile = "0.2.6"
 spin = "0.5.2"
 x86_64 = "0.14.2"
@@ -16,6 +16,9 @@ linked_list_allocator = "0.9.0"
 virtio-drivers = "0.11"
 zerocopy = { version = "0.8.26", default-features = false, features = ["derive"] }
 static_assertions = "1.1.0"
+
+[target.'cfg(target_os = "none")'.dependencies]
+bootloader = { version = "0.9", features = ["map_physical_memory"] }
 
 [dependencies.lazy_static]
 version = "1.0"
@@ -69,3 +72,9 @@ harness = true # defines whether we should use a test runner for our integration
 [[test]]
 name = "stack_overflow"
 harness = false  # this means that the test is treated like a normal executable
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

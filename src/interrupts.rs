@@ -3,7 +3,7 @@
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 // you can check their docs for detailed stuff
 use crate::gdt;
-use crate::{print, debug, warn, error};
+use crate::{debug, error};
 
 // static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
 // the CPU will access this table on every interrupt so it needs to live until we

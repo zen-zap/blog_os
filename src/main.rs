@@ -28,6 +28,7 @@ use blog_os::{
 	virtio::{FRAME_ALLOCATOR, OsHal, PAGE_MAPPER, pci, pci::PciConfigIo},
 	virtio_debug,
 	warn,
+	shell::shell_task,
 };
 use bootloader::{BootInfo, entry_point};
 use core::{arch::asm, panic::PanicInfo};
@@ -233,29 +234,29 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 		error!("No VirtIO block device found!");
 	}
 
-	maybe_run_tests();
 
 	let mut executor = Executor::new();
 
 	executor.spawn(Task::new(example_task()));
-	executor.spawn(Task::new(keyboard::print_keypresses()));
+	/*executor.spawn(Task::new(keyboard::print_keypresses()));*/
+	executor.spawn(Task::new(shell_task::run_shell_task()));
 	executor.run();
 
 	debug!("Kernel initialization complete - starting task executor");
 	blog_os::hlt_loop();
 }
 
-#[cfg(test)]
-fn maybe_run_tests() {
-	// When running `cargo test` the harness provides `test_main`
-	// via `#![reexport_test_harness_main = "test_main"]`.
-	test_main();
-}
-
-// no op in normal boot
-#[cfg(not(test))]
-fn maybe_run_tests() {}
-
+// #[cfg(test)]
+// fn maybe_run_tests() {
+// 	// When running `cargo test` the harness provides `test_main`
+// 	// via `#![reexport_test_harness_main = "test_main"]`.
+// 	test_main();
+// }
+//
+// // no op in normal boot
+// #[cfg(not(test))]
+// fn maybe_run_tests() {}
+//
 
 /// our panic handler in general mode
 #[cfg(not(test))]

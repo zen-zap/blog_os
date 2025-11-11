@@ -21,6 +21,7 @@ pub mod task;
 pub mod vga_buffer;
 pub mod virtio;
 pub mod utils;
+pub mod shell;
 
 extern crate alloc;
 extern crate static_assertions as sa;

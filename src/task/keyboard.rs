@@ -1,13 +1,26 @@
 // in src/task/keyboard.rs
 
 use conquer_once::spin::OnceCell;
-use core::iter::Scan;
+use core::{
+	iter::Scan,
+	pin::Pin,
+	task::{Context, Poll}
+};
 use crossbeam_queue::ArrayQueue;
+use futures_util::{
+	task::AtomicWaker,
+	stream::Stream,
+	stream::StreamExt
+};
+use crate::{
+	warn,
+	debug,
+	print
+};
+use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1, layouts};
 
 /// Used to store the tasks from the Interrupt Handler
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
-
-use crate::{warn, debug};
 
 /// Called by the keyboard interrupt handler
 ///
@@ -41,7 +54,7 @@ impl ScancodeStream {
 	/// made for exclusive creation of ScancodeStream since it is a private struct
 	pub fn new() -> Self {
 		SCANCODE_QUEUE
-			.try_init_once(|| ArrayQueue::new(100))
+			.try_init_once(|| ArrayQueue::new(200))
 			.expect("ScancodeStream::new should only be called once");
 
 		ScancodeStream { _private: () }
@@ -53,9 +66,6 @@ impl ScancodeStream {
 	// Made Stream trait to handle this
 }
 
-use futures_util::stream::Stream;
-use futures_util::task::AtomicWaker;
-
 /// Waker for scancode stream
 ///
 /// The poll_next implementation stores the current waker in this static,
@@ -63,9 +73,6 @@ use futures_util::task::AtomicWaker;
 ///
 /// AtomicWaker --> can be modified safely in concurrent scenarios
 static SCANCODE_WAKER: AtomicWaker = AtomicWaker::new();
-
-use core::pin::Pin;
-use core::task::{Context, Poll};
 
 impl Stream for ScancodeStream {
 	type Item = u8;
@@ -100,10 +107,6 @@ impl Stream for ScancodeStream {
 	}
 }
 
-use crate::print;
-use futures_util::stream::StreamExt;
-use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1, layouts};
-
 pub async fn print_keypresses() {
 	let mut scancodes = ScancodeStream::new();
 	let mut keyboard = Keyboard::new(ScancodeSet1::new(), layouts::Us104Key, HandleControl::Ignore);
@@ -120,5 +123,28 @@ pub async fn print_keypresses() {
 				}
 			}
 		}
+	}
+}
+
+///  Loops until it can decode a full key from a scancode stream
+///
+/// This is a reusable async function that any task can call to await
+/// the next complete key press
+pub async fn read_key(
+	scancodes: &mut ScancodeStream,
+	keyboard: &mut Keyboard<layouts::Us104Key, ScancodeSet1>
+) -> DecodedKey {
+	// we'll loop internally until we have enough scancodes from the stream to completely decode
+	// the key
+	loop {
+		let scancode = scancodes.next().await.expect("Failed to fetch next scancode");
+		// check if full key or not
+		if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+			if let Some(key) = keyboard.process_keyevent(key_event) {
+				return key;
+			}
+		}
+		// if we're here, it means that the scancode was not a full key yet.
+		// we'll await the next scancode in the next iteration
 	}
 }
