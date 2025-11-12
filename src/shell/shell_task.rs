@@ -23,14 +23,14 @@ pub async fn run_shell_task() {
 				DecodedKey::RawKey(key) => {
 					match key {
 						KeyCode::Return => {
-                        println!(); // Move to the next line
-                        process_command(&line_buffer).await;
-                        break; // Exit inner loop to print new prompt
+							println!(); // Move to the next line
+							process_command(&line_buffer).await;
+							break; // Exit inner loop to print new prompt
                     	}
 						KeyCode::Backspace => {
 							if !line_buffer.is_empty() {
 								line_buffer.pop();
-								print!("\u{8}"); // Move cursor back one
+								print!("\u{8} \u{8}");
 							}
 						}
 						_ => {},

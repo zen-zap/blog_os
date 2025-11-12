@@ -8,7 +8,10 @@ use alloc::{string::String, vec::Vec};
 use core::convert::TryFrom;
 use core::ptr::write;
 use pc_keyboard::KeyCode::P;
+use virtio_drivers::device::blk::VirtIOBlk;
+use virtio_drivers::transport::pci::PciTransport;
 use zerocopy::{FromBytes, IntoBytes, KnownLayout, U16, U32, U64};
+use crate::virtio::OsHal;
 
 const MAGIC_NUMBER: u32 = 0x_DEAD_BEEF;
 const ROOT_DIRECTORY_INODE: u64 = 0;
@@ -441,6 +444,244 @@ impl<D: BlockDevice> SFS<D> {
 		Ok((inode_index, dir_block))
 	}
 
+	fn create_file_in_dir(
+		&mut self,
+		parent_inode_num: u64,
+		filename: &str,
+	) -> Result<(u64 /*new inode index*/, u64 /*parent dir data block*/), FileSystemError> {
+		if filename.as_bytes().len() > DIR_NAME_MAX || filename.is_empty() {
+			return Err(FileSystemError::NameTooLong);
+		}
+
+		let parent_dir_inode = self.read_inode(parent_inode_num)?;
+		if parent_dir_inode.mode != FileType::Directory {
+			// Can't create a file inside a file!
+			return Err(FileSystemError::CorruptLayout);
+		}
+
+		// get the parent's data block
+		// (assumes one block per dir for now)
+		let parent_dir_data_block = parent_dir_inode.direct_pointers[0];
+		if parent_dir_data_block == 0 {
+			// This shouldn't happen for a correctly initialized directory
+			return Err(FileSystemError::CorruptLayout);
+		}
+
+		let mut parent_dir_block_buf = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(parent_dir_data_block, &mut parent_dir_block_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		// collision check
+		let mut empty_slot_index: Option<usize> = None;
+		let entries = DirEntryBlock::new(&parent_dir_block_buf);
+		for (i, entry) in entries.enumerate() {
+			let is_used = (entry.flags.get() & DIRENT_USED) != 0;
+			if is_used {
+				let entry_name_len = entry.name_len.get() as usize;
+				if &entry.name[..entry_name_len] == filename.as_bytes() {
+					println!("[FS] File with same name found");
+					return Err(FileSystemError::AlreadyExists);
+				}
+			} else if empty_slot_index.is_none() {
+				empty_slot_index = Some(i);
+			}
+		}
+
+		let slot_index = empty_slot_index.ok_or(FileSystemError::NoSpace)?;
+
+		let new_inode_index = self.allocate_inode()?;
+		let new_inode = Inode {
+			mode: FileType::File,
+			user_id: 0,
+			group_id: 0,
+			link_count: 1,
+			size_in_bytes: 0,
+			last_access_time: 0,
+			last_modification_time: 0,
+			creation_time: 0,
+			direct_pointers: [0u64; 10],
+			indirect_pointer: 0,
+		};
+		self.write_inode(new_inode, new_inode_index)?;
+
+		self.write_dirent_into_block(
+			&mut parent_dir_block_buf,
+			slot_index,
+			new_inode_index,
+			filename.as_bytes(),
+		)?;
+
+		self.device
+			.write_blocks(parent_dir_data_block, &parent_dir_block_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		Ok((new_inode_index, parent_dir_data_block))
+	}
+
+	fn create_directory_in_root(&mut self, name: &str) -> Result<u64, FileSystemError> {
+		if name.as_bytes().len() > DIR_NAME_MAX || name.is_empty() {
+			return Err(FileSystemError::NameTooLong);
+			// should also include empty one but meh .. fix sometime later
+		}
+
+		let root_dir_inode = self.read_inode(ROOT_DIRECTORY_INODE)?;
+		if root_dir_inode.mode != FileType::Directory {
+			return Err(FileSystemError::CorruptLayout);
+		}
+
+		let dir_block_addr = root_dir_inode.direct_pointers[0];
+		if dir_block_addr == 0 {
+			return Err(FileSystemError::CorruptLayout);
+		}
+
+		let mut dir_block_buf = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(dir_block_addr, &mut dir_block_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		// collision check
+		let mut empty_slot_index: Option<usize> = None;
+		let entries = DirEntryBlock::new(&dir_block_buf);
+		for (i, entry) in entries.enumerate() {
+			let is_used = (entry.flags.get() & DIRENT_USED) != 0;
+			if is_used {
+				let entry_name_len = entry.name_len.get() as usize;
+				if &entry.name[..entry_name_len] == name.as_bytes() {
+					println!("[FS] Directory with same name found");
+					return Err(FileSystemError::AlreadyExists);
+				}
+			} else if empty_slot_index.is_none() {
+				empty_slot_index = Some(i);
+			}
+		}
+		let slot_index = empty_slot_index.ok_or(FileSystemError::NoSpace)?;
+
+		// gotta allocate an inode and data block
+		let new_inode_index = self.allocate_inode()?;
+		let new_data_block = self.allocate_data_block()?;
+
+		let mut new_inode = Inode {
+			mode: FileType::Directory,
+			user_id: 0,
+			group_id: 0,
+			link_count: 2, // Starts with 2 (for . and parent's link to it)
+			size_in_bytes: 0, // Dirs don't really use this
+			last_access_time: 0,
+			last_modification_time: 0,
+			creation_time: 0,
+			direct_pointers: [0u64; 10],
+			indirect_pointer: 0,
+		};
+
+		// point new dir's inode to its new data block
+		new_inode.direct_pointers[0] = new_data_block;
+		self.write_inode(new_inode, new_inode_index)?;
+
+		let mut new_dir_block = [0u8; BLOCK_SIZE];
+		// "." points to itself
+		self.write_dirent_into_block(&mut new_dir_block, 0, new_inode_index, b".")?;
+		// ".." points to its parent (the root)
+		self.write_dirent_into_block(&mut new_dir_block, 1, ROOT_DIRECTORY_INODE, b"..")?;
+
+		self.device
+			.write_blocks(new_data_block, &new_dir_block)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		self.write_dirent_into_block(&mut dir_block_buf, slot_index, new_inode_index, name.as_bytes())?;
+
+		self.device
+			.write_blocks(dir_block_addr, &dir_block_buf)
+			.map_err(|_| FileSystemError::BlockError)?;
+
+		println!("[FS] Created directory '{}' with inode #{}", name, new_inode_index);
+		Ok(new_inode_index)
+	}
+
+	fn find_entry_in_dir(
+		&mut self,
+		dir_inode: &Inode,
+		name: &str,
+	) -> Result<u64, FileError> {
+		if dir_inode.mode != FileType::Directory {
+			return Err(FileError::Corrupt);
+		}
+
+		let data_block_addr = dir_inode.direct_pointers[0];
+		if data_block_addr == 0 {
+			return Err(FileError::FileNotFound);
+		}
+
+		let mut dir_block = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(data_block_addr, &mut dir_block)
+			.map_err(|_| FileError::BlockReadError)?;
+
+		let entries = DirEntryBlock::new(&dir_block);
+		for e in entries {
+			let used = (e.flags.get() & DIRENT_USED) != 0;
+			if used {
+				let nlen = e.name_len.get() as usize;
+				if &e.name[..nlen] == name.as_bytes() {
+					return Ok(e.inode.get());
+				}
+			}
+		}
+		// we went through the whole block but did not find it
+		Err(FileError::FileNotFound)
+	}
+
+	fn find_inode_by_path(
+		&mut self,
+		path: &str,
+	) -> Result<u64, FileError> {
+		if path == "/" {
+			return Ok(ROOT_DIRECTORY_INODE);
+		}
+
+		let mut current_inode_num = ROOT_DIRECTORY_INODE;
+		let components = path.split('/').filter(|&s| !s.is_empty());
+
+		for comp in components {
+			let current_dir_inode = self
+				.read_inode(current_inode_num)
+				.map_err(|_| FileError::Corrupt)?;
+
+			let next_inode_num = self.find_entry_in_dir(&current_dir_inode, comp)?;
+			current_inode_num = next_inode_num;
+		}
+
+		Ok(current_inode_num)
+	}
+
+	/// Splits a full path into its parent directory and its final component (basename).
+	///
+	/// Returns `(parent_path, basename)`.
+	///
+	/// ### Examples
+	/// * `/foo/bar.txt` -> `("/foo", "bar.txt")`
+	/// * `/foo.txt`     -> `("/", "foo.txt")`
+	/// * `foo.txt`      -> `(".", "foo.txt")` (Assumes relative to current dir)
+	/// * `/`            -> `("/", "")`
+	fn parse_path(path: &str) -> (&str, &str) {
+		if path == "/" {
+			return ("/", "");
+		}
+
+		match path.rsplit_once('/') {
+			Some((parent, basename)) => {
+				if parent.is_empty() {
+					("/", basename)
+				} else {
+					(parent, basename)
+				}
+			}
+			None => {
+				(".", path)
+			}
+		}
+	}
+
 	// free helpers
 	fn free_inode(
 		&mut self,
@@ -535,6 +776,46 @@ impl<D: BlockDevice> SFS<D> {
 
 		Err(FileSystemError::CorruptLayout)
 	}
+
+	fn find_entry_detailed(
+		&mut self,
+		parent_inode_num: u64,
+		filename: &str,
+	) -> Result<(
+		usize, /* slot index */
+		u64,   /* file inode num */
+		[u8; BLOCK_SIZE], /* parent dir block buffer */
+		u64    /* parent dir block address */
+	), FileError> {
+		let parent_inode = self.read_inode(parent_inode_num).map_err(|_| FileError::Corrupt)?;
+		if parent_inode.mode != FileType::Directory {
+			return Err(FileError::Corrupt);
+		}
+
+		let dir_block_addr = parent_inode.direct_pointers[0];
+		if dir_block_addr == 0 {
+			return Err(FileError::FileNotFound);
+		}
+
+		let mut dir_block_buf = [0u8; BLOCK_SIZE];
+		self.device
+			.read_blocks(dir_block_addr, &mut dir_block_buf)
+			.map_err(|_| FileError::BlockReadError)?;
+
+		let entries = DirEntryBlock::new(&dir_block_buf);
+		for (i, e) in entries.enumerate() {
+			let used = (e.flags.get() & DIRENT_USED) != 0;
+			if used {
+				let nlen = e.name_len.get() as usize;
+				if &e.name[..nlen] == filename.as_bytes() {
+					// Found it!
+					return Ok((i, e.inode.get(), dir_block_buf, dir_block_addr));
+				}
+			}
+		}
+
+		Err(FileError::FileNotFound)
+	}
 }
 
 /// Holds the inode index of the file
@@ -565,7 +846,7 @@ pub trait FileSystem {
 	/// Delete a file from the File System
 	fn delete_file(
 		&mut self,
-		name: &str,
+		path: &str,
 	) -> Result<(), FileError>;
 	/// Open a file from the file system for reading or writing
 	fn open_file(
@@ -573,7 +854,7 @@ pub trait FileSystem {
 		name: &str,
 	) -> Result<FileHandler, FileError>;
 	/// List the available files
-	fn list_file(&mut self) -> Result<Vec<String>, FileError>;
+	fn list_file(&mut self, path: &str) -> Result<Vec<String>, FileError>;
 }
 
 #[derive(Debug)]
@@ -591,37 +872,54 @@ pub enum FileSystemError {
 impl<D: BlockDevice> FileSystem for SFS<D> {
 	fn create_file(
 		&mut self,
-		name: &str,
+		path: &str,
 	) -> Result<FileHandler, FileError> {
-		let (inode_index, _dir_block) = self.create_file_in_root(name).map_err(|e| match e {
-			FileSystemError::NameTooLong => FileError::InvalidName,
-			FileSystemError::NoSpace => FileError::NoSpace,
-			FileSystemError::CorruptLayout => FileError::Corrupt,
-			_ => FileError::CreationFailed,
-		})?;
-		println!("[FS] Created file '{}' with inode #{}", name, inode_index);
-		Ok(FileHandler(inode_index as usize))
+		// "/docs/new.txt" -> ("/docs", "new.txt")
+		let (parent_path, basename) = Self::parse_path(path);
+		if basename.is_empty() {
+			return Err(FileError::InvalidName); // Can't create a file with no name
+		}
+
+		let parent_inode_num = self.find_inode_by_path(parent_path)?;
+
+		let (new_inode_index, _dir_block) = self
+			.create_file_in_dir(parent_inode_num, basename)
+			.map_err(|e| match e {
+				FileSystemError::NameTooLong => FileError::InvalidName,
+				FileSystemError::NoSpace => FileError::NoSpace,
+				FileSystemError::CorruptLayout => FileError::Corrupt,
+				FileSystemError::AlreadyExists => FileError::FileExists,
+				_ => FileError::CreationFailed,
+			})?;
+
+		println!("[FS] Created file '{}' with inode #{}", path, new_inode_index);
+		Ok(FileHandler(new_inode_index as usize))
 	}
 
 	fn delete_file(
 		&mut self,
-		name: &str,
+		path: &str,
 	) -> Result<(), FileError> {
-		if name.is_empty() {
+		let (parent_path, basename) = Self::parse_path(path);
+		if basename.is_empty() || basename == "." || basename == ".." {
 			return Err(FileError::InvalidName);
 		}
-		if name.len() >= DIR_NAME_MAX {
-			return Err(FileError::NameTooLong);
-		}
 
-		let (slot, inode_idx, mut dir_block, dir_blk) =
-			self.find_root_entry(name).map_err(|_| FileError::FileNotFound)?;
+		let parent_inode_num = self.find_inode_by_path(parent_path)?;
 
-		if inode_idx == 0 {
+		let (slot, inode_idx, mut dir_block, dir_blk_addr) =
+			self.find_entry_detailed(parent_inode_num, basename)?;
+
+		if inode_idx == 0 { // should not happen
 			return Err(FileError::FileNotFound);
 		}
 
 		let inode = self.read_inode(inode_idx).map_err(|_| FileError::Corrupt)?;
+		// TODO: add check here so that we don't delete a non-empty directory - not necessary now!
+		if inode.mode == FileType::Directory {
+			return Err(FileError::InvalidName); // is a directory
+		}
+
 		for &dp in &inode.direct_pointers {
 			if dp != 0 {
 				self.free_data_block(dp).map_err(|_| FileError::Corrupt)?;
@@ -638,36 +936,49 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		}
 
 		self.device
-			.write_blocks(dir_blk, &dir_block)
+			.write_blocks(dir_blk_addr, &dir_block)
 			.map_err(|_| FileError::BlockWriteError)?;
 
-		println!("[FS] Deleted file '{}' (inode #{})", name, inode_idx);
+		println!("[FS] Deleted file '{}' (inode #{})", path, inode_idx);
 		Ok(())
 	}
 
 	fn open_file(
 		&mut self,
-		name: &str,
+		path: &str,
 	) -> Result<FileHandler, FileError> {
-		let (_, inode_idx, _, _) =
-			self.find_root_entry(name).map_err(|_| FileError::FileNotFound)?;
-
+		let inode_idx = self.find_inode_by_path(path)?;
 		Ok(FileHandler(inode_idx as usize))
 	}
 
 	/// since we currently follow a single directory structure, this just returns the names of
 	/// files in that directory
-	fn list_file(&mut self) -> Result<Vec<String>, FileError> {
-		let root = self.read_inode(0).map_err(|_| FileError::Corrupt)?;
-		let block = root.direct_pointers[0];
-		if block == 0 {
-			return Err(FileError::Corrupt);
+	fn list_file(
+		&mut self,
+		path: &str, // The trait now passes us a path
+	) -> Result<Vec<String>, FileError> {
+		// 1. Find the inode for the directory they want to list
+		let dir_inode_num = self.find_inode_by_path(path)?;
+		let dir_inode = self.read_inode(dir_inode_num).map_err(|_| FileError::Corrupt)?;
+
+		// 2. Check if it's actually a directory
+		if dir_inode.mode != FileType::Directory {
+			// You can't 'ls' a file!
+			return Err(FileError::InvalidName);
 		}
 
+		// 3. Get its data block
+		let block = dir_inode.direct_pointers[0];
+		if block == 0 {
+			return Ok(Vec::new()); // Empty directory
+		}
+
+		// 4. Read the block and list its entries (same logic as before)
 		let mut buf = [0u8; BLOCK_SIZE];
 		self.device
 			.read_blocks(block, &mut buf)
 			.map_err(|_| FileError::BlockReadError)?;
+
 		let mut res = Vec::new();
 		let entries = DirEntryBlock::new(&buf);
 		for e in entries {
@@ -764,3 +1075,7 @@ impl<D: BlockDevice> SFS<D> {
 		Ok(s.to_string())
 	}
 }
+
+// Exact type of the file system that we're going to use
+// the memory mapped regions of the VirtIOBlk device live forever?
+pub type GLOBALFSType = SFS<VirtIOBlk<OsHal, PciTransport>>; // this does not expect a lifetime

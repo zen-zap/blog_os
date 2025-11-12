@@ -25,6 +25,11 @@ pub const DIR_ENTRIES_PER_BLOCK: usize = BLOCK_SIZE / DIR_ENTRY_SIZE;
 
 type U32Le = U32<LE>;
 
+/// On-disk representation of the filesystem superblock with little-endian byte order.
+///
+/// This structure is stored at block 0 and contains metadata about the entire filesystem.
+/// Uses zerocopy types (U64<LE>, U32<LE>) for safe serialization to/from disk.
+/// Size is exactly 64 bytes to fit cleanly within a disk block.
 #[derive(Debug, Copy, Clone, IntoBytes, FromBytes, Immutable, KnownLayout)]
 #[repr(C)]
 pub struct DiskSuperBlock {
@@ -39,6 +44,10 @@ pub struct DiskSuperBlock {
 	pub _pad0: U32Le, // explicit padding to avoid implicit tail padding so total is 64 bytes
 }
 
+/// In-memory representation of the filesystem superblock with native byte order.
+///
+/// This is the working copy used by the filesystem implementation.
+/// Can be converted to/from DiskSuperBlock for persistence.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct SuperBlock {
@@ -89,6 +98,11 @@ impl core::convert::TryFrom<DiskSuperBlock> for SuperBlock {
 	}
 }
 
+/// In-memory representation of a filesystem inode (index node).
+///
+/// An inode contains metadata about a file or directory, including permissions,
+/// timestamps, size, and pointers to the actual data blocks on disk.
+/// Supports up to 10 direct blocks plus single indirect addressing.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct Inode {
@@ -100,10 +114,21 @@ pub struct Inode {
 	pub last_access_time: u64,
 	pub last_modification_time: u64,
 	pub creation_time: u64,
-	pub direct_pointers: [u64; 10], // they hold the handlers to the allocated data blocks?
+	/// each entry is the block number of a data block that contains file contents
+	pub direct_pointers: [u64; 10],
+	/// single block number that points to an indirect block.
+	/// The indirect block contains an array of block numbers pointing to additional data blocks.
+	/// That extends the maximum file size without enlarging the inode.
+	///
+	/// pointer value = 0 = sentinel (unused)
 	pub indirect_pointer: u64,
 }
 
+/// On-disk representation of an inode with little-endian byte order.
+///
+/// This structure is exactly 128 bytes and uses zerocopy types for safe serialization.
+/// Fields are ordered carefully to avoid padding: 64-bit fields first, then smaller fields.
+/// Multiple inodes are packed into a single block (4 inodes per 512-byte block).
 #[derive(Debug, Copy, Clone, IntoBytes, FromBytes, Immutable, KnownLayout)]
 #[repr(C)]
 pub struct DiskInode {
@@ -160,17 +185,26 @@ impl core::convert::TryFrom<DiskInode> for Inode {
 
 const_assert!(core::mem::size_of::<DiskInode>() == INODE_SIZE);
 
-// On-disk directory entry: 64 bytes
+/// On-disk representation of a directory entry with little-endian byte order.
+///
+/// Each directory entry is exactly 64 bytes, allowing 8 entries per 512-byte block.
+/// The entry maps a filename to an inode number and includes flags to indicate validity.
 #[derive(Debug, Copy, Clone, IntoBytes, FromBytes, Immutable, KnownLayout)]
 #[repr(C)]
 pub struct DiskDirEntry {
-	pub inode: U64<LE>,    // target inode number
-	pub name_len: U16<LE>, // length of name in bytes
-	pub flags: U16<LE>,    // bit0 = USED
+	/// target inode number
+	pub inode: U64<LE>,
+	/// length of name in bytes
+	pub name_len: U16<LE>,
+	/// bit 0 = USED
+	pub flags: U16<LE>,
 	pub name: [u8; DIR_NAME_MAX],
 }
 
-// Helper struct to interate over different DiskDirEntries in a buffer
+/// Helper struct to iterate over different DiskDirEntries in a buffer.
+///
+/// Provides an iterator interface over the directory entries packed into a single block.
+/// Each call to `next()` returns the next entry until all entries in the block are exhausted.
 pub struct DirEntryBlock<'a> {
 	block: &'a [u8; BLOCK_SIZE],
 	idx: usize,
@@ -207,6 +241,11 @@ pub const DIRENT_USED: u16 = 1;
 // Shouldn't the bitmap bits also hold which resource block they are pointing to?
 // Nope the position of the bitmap is the pointer .. that's the whole point of it!
 // A Bitmap is a view over raw bytes
+/// Bitmap data structure for tracking allocation of inodes or data blocks.
+///
+/// Each bit in the underlying byte slice represents whether a resource (inode or data block)
+/// is allocated (1) or free (0). The bit index directly corresponds to the resource index.
+/// Provides methods to set, clear, and find free bits efficiently.
 #[derive(Debug)]
 #[repr(C)]
 pub struct Bitmap<'a> {
@@ -287,18 +326,27 @@ impl<'a> Bitmap<'a> {
 	}
 }
 
+/// Errors that can occur during bitmap operations.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 #[repr(C)]
 pub enum BitmapError {
+	/// Attempted to allocate a resource that is already allocated.
 	AlreadyAllocated,
+	/// Attempted to free a resource that is already free.
 	AlreadyCleared,
 }
 
+/// Type of filesystem entry (file, directory, etc.).
+///
+/// Stored in the inode to distinguish between different kinds of filesystem objects.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u16)]
 pub enum FileType {
+	/// Unknown or uninitialized type.
 	Unknown = 0,
+	/// Regular file.
 	File = 0x1,
+	/// Directory containing other files and directories.
 	Directory = 0x2,
 }
 

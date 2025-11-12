@@ -6,7 +6,7 @@
 #![test_runner(blog_os::test_runner)]
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
-use blog_os::fs::simple_fs::{FileSystem, FileSystemError, SFS};
+use blog_os::fs::simple_fs::{FileSystem, FileSystemError, SFS, GLOBALFSType};
 use blog_os::{
 	allocator,
 	debug,
@@ -21,7 +21,6 @@ use blog_os::{
 	print,
 	println,
 	task::{Task, executor::Executor, keyboard, simple_executor::SimpleExecutor},
-	// Import all tracing macros
 	trace,
 	trace_function,
 	trace_here,
@@ -32,6 +31,8 @@ use blog_os::{
 };
 use bootloader::{BootInfo, entry_point};
 use core::{arch::asm, panic::PanicInfo};
+use conquer_once::spin::OnceCell;
+use spin::Mutex;
 use virtio_drivers::{
 	Hal, PhysAddr,
 	device::blk::VirtIOBlk,
@@ -50,6 +51,8 @@ use zerocopy::IntoBytes;
 extern crate alloc;
 
 entry_point!(kernel_main);
+
+static GLOBAL_FS: OnceCell<Mutex<GLOBALFSType>> = OnceCell::uninit();
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	info!("Kernel starting up...");
@@ -209,7 +212,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
 		// 5. List files (to see it's there)
 		fs_debug!("Listing root directory...");
-		match fs.list_file() {
+		match fs.list_file(".") {
 			Ok(files) => info!("Files in root: {:?}", files),
 			Err(e) => error!("Failed to list files: {:?}", e),
 		}
@@ -223,13 +226,18 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
 		// 7. List files again (to see it's gone)
 		fs_debug!("Listing root directory after delete...");
-		match fs.list_file() {
+		match fs.list_file(".") {
 			Ok(files) => info!("Files in root: {:?}", files),
 			Err(e) => error!("Failed to list files: {:?}", e),
 		}
 
 		info!("--- SFS Test Complete ---");
 		// --- END SFS C-W-R-D TEST ---
+
+		info!("Moving filesystem to global static ... ");
+		GLOBAL_FS.try_init_once(|| Mutex::new(fs)).expect("Failed to initialize GLOBAL_FS");
+		info!("Filesystem is now global");
+
 	} else {
 		error!("No VirtIO block device found!");
 	}
