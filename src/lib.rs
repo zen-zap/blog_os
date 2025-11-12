@@ -28,6 +28,9 @@ extern crate static_assertions as sa;
 
 use core::panic::PanicInfo;
 
+pub use crate::fs::simple_fs::GLOBALFSType;
+pub static GLOBAL_FS: OnceCell<Mutex<GLOBALFSType>> = OnceCell::uninit();
+
 /// trait for `test` functions
 pub trait Testable {
 	/// to run the function implementing this trait
@@ -103,6 +106,8 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 }
 
 use bootloader::{entry_point, BootInfo};
+use conquer_once::spin::OnceCell;
+use spin::Mutex;
 
 #[cfg(test)]
 entry_point!(test_kernel_main);

@@ -43,7 +43,11 @@ run-args = [
     "-m", "256M",
     "-drive", "file=disk.img,format=raw,if=none,id=disk0",
     "-device", "virtio-blk-pci,drive=disk0",
-    "-serial", "stdio" # just for now since the QEMU window does not show the full output
+    "-display", "gtk,zoom-to-fit=on",
+    "-vga", "std",
+    "-global", "VGA.xres=1280",
+    "-global", "VGA.yres=800",
+    # "-serial", "stdio" # just for now since the QEMU window does not show the full output
 ]
 
 test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-display", "none"]

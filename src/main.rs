@@ -52,7 +52,7 @@ extern crate alloc;
 
 entry_point!(kernel_main);
 
-static GLOBAL_FS: OnceCell<Mutex<GLOBALFSType>> = OnceCell::uninit();
+use blog_os::GLOBAL_FS;
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	info!("Kernel starting up...");
@@ -159,14 +159,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 		info!("--- Starting SFS C-W-R-D Test ---");
 		let filename = "test.txt";
 
-		// 1. Cleanup (in case of previous failed run)
 		fs_debug!("Attempting cleanup of '{}'...", filename);
 		match fs.delete_file(filename) {
 			Ok(_) => { fs_debug!("Cleanup successful."); },
 			Err(_) => { fs_debug!("File not present, no cleanup needed."); },
 		}
 
-		// 2. Create File
 		fs_debug!("Creating '{}'...", filename);
 		let handle = match fs.create_file(filename) {
 			Ok(h) => {
@@ -179,7 +177,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			},
 		};
 
-		// 3. Write to File (USING YOUR NEW FUNCTION)
 		let lines_to_write = &["Hello from your SFS!", "This is the second line."];
 		fs_debug!("Writing content to file...");
 		match fs.write_file_lines(handle, lines_to_write) {
@@ -190,7 +187,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			},
 		}
 
-		// 4. Read from File (USING YOUR NEW FUNCTION)
 		fs_debug!("Reading content back from file...");
 		match fs.read_file(handle) {
 			Ok(content) => {
@@ -210,21 +206,18 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			},
 		}
 
-		// 5. List files (to see it's there)
 		fs_debug!("Listing root directory...");
 		match fs.list_file(".") {
 			Ok(files) => info!("Files in root: {:?}", files),
 			Err(e) => error!("Failed to list files: {:?}", e),
 		}
 
-		// 6. Delete File
 		fs_debug!("Deleting '{}'...", filename);
 		match fs.delete_file(filename) {
 			Ok(_) => info!("File deleted successfully."),
 			Err(e) => error!("Failed to delete file: {:?}", e),
 		}
 
-		// 7. List files again (to see it's gone)
 		fs_debug!("Listing root directory after delete...");
 		match fs.list_file(".") {
 			Ok(files) => info!("Files in root: {:?}", files),
@@ -236,6 +229,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
 		info!("Moving filesystem to global static ... ");
 		GLOBAL_FS.try_init_once(|| Mutex::new(fs)).expect("Failed to initialize GLOBAL_FS");
+		// we need to make sure this transfer of file system happens other anything else attempts
+		// to use the filesystem for something
 		info!("Filesystem is now global");
 
 	} else {

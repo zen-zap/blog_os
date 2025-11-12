@@ -24,7 +24,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
         SERIAL1.lock().write_fmt(args).expect("Printing to Serial failed!");
     });
 
-    // disbaling interrupts shouldn't be the general solution .. it increases the worst-case
+    // disabling interrupts shouldn't be the general solution .. it increases the worst-case
     // interrupt latency 
 }
 

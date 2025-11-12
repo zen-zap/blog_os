@@ -3,6 +3,8 @@
     <words>
       <w>nlen</w>
       <w>paddr</w>
+      <w>scanc</w>
+      <w>subdir</w>
       <w>virt</w>
       <w>virtio</w>
       <w>wakers</w>
