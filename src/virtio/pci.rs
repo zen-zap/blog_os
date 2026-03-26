@@ -1,4 +1,4 @@
-// in src/virtio/pci
+//! in src/virtio/pci.rs
 
 use crate::{pci_debug, info, debug};
 use virtio_drivers::transport::pci::bus::{ConfigurationAccess, DeviceFunction, PciRoot};

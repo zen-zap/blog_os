@@ -60,7 +60,7 @@ lazy_static! {
 		let mut gdt = GlobalDescriptorTable::new();
 
 		let code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
-		// check out what the kernle_code_segment entails .. it's some useful stuff
+		// check out what the kernel_code_segment entails .. it's some useful stuff
 
 		let tss_selector = gdt.add_entry(Descriptor::tss_segment(&TSS));
 		// add the TSS you created to the newly created GDT

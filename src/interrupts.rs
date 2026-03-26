@@ -40,7 +40,7 @@ lazy_static! {
 }
 
 pub fn init_idt() {
-	IDT.load(); // lidt - Load Interrupt Descriptor Table
+	IDT.load(); // Load Interrupt Descriptor Table
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
