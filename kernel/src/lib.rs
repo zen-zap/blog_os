@@ -18,10 +18,10 @@ pub mod scanc;
 pub mod serial;
 pub mod task;
 // Add tracing module
+pub mod shell;
+pub mod utils;
 pub mod vga_buffer;
 pub mod virtio;
-pub mod utils;
-pub mod shell;
 
 extern crate alloc;
 extern crate static_assertions as sa;
@@ -105,7 +105,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 	}
 }
 
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 use conquer_once::spin::OnceCell;
 use spin::Mutex;
 
@@ -114,7 +114,7 @@ entry_point!(test_kernel_main);
 
 /// actual entry point?
 #[cfg(test)]
-fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
 	init(); // for breakpoints
 	test_main();
 	hlt_loop();

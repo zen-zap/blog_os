@@ -3,11 +3,11 @@
 #![no_std]
 #![no_main]
 #![feature(custom_test_frameworks)]  // to use our custom test framework
-#![test_runner(blog_os::test_runner)] // instead of reimplementing it ... take it from somewhere else
+#![test_runner(creo::test_runner)] // instead of reimplementing it ... take it from somewhere else
 #![reexport_test_harness_main = "test_main"] // to set the main function of the test
 
 use core::panic::PanicInfo;
-use blog_os::{exit_qemu, QemuExitCode, serial_print, serial_println}; // -- add before any test
+use creo::{exit_qemu, QemuExitCode, serial_print, serial_println}; // -- add before any test
 
 /// all integration tests are their own executables and hence have their own entry_points
 /// 
@@ -25,7 +25,7 @@ pub extern "C" fn _start() -> !
 #[panic_handler]
 fn panic(info: &PanicInfo) -> !
 {
-    blog_os::test_panic_handler(info)
+    creo::test_panic_handler(info)
 }
 
 #[test_case]

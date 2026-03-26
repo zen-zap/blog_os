@@ -3,35 +3,28 @@
 #![no_main]
 #![reexport_test_harness_main = "test_main"]
 #![feature(custom_test_frameworks)]
-#![test_runner(blog_os::test_runner)]
+#![test_runner(creo::test_runner)]
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
-use blog_os::fs::simple_fs::{FileSystem, FileSystemError, SFS, GLOBALFSType};
-use blog_os::{
-	allocator,
-	debug,
-	debug_if,
-	error,
-	fs_debug,
-	info,
+use bootloader_api::{
+	BootInfo,
+	config::{BootloaderConfig, Mapping},
+	entry_point,
+};
+use conquer_once::spin::OnceCell;
+use core::{arch::asm, panic::PanicInfo};
+use creo::fs::simple_fs::{FileSystem, FileSystemError, GLOBALFSType, SFS};
+use creo::{
+	allocator, debug, debug_if, error, fs_debug, info,
 	interrupts::InterruptIndex::Keyboard,
 	memory::{self, BootInfoFrameAllocator, translate_addr},
-	memory_debug,
-	pci_debug,
-	print,
-	println,
-	task::{Task, executor::Executor, keyboard, simple_executor::SimpleExecutor},
-	trace,
-	trace_function,
-	trace_here,
-	virtio::{FRAME_ALLOCATOR, OsHal, PAGE_MAPPER, pci, pci::PciConfigIo},
-	virtio_debug,
-	warn,
+	memory_debug, pci_debug, print, println,
 	shell::shell_task,
+	task::{Task, executor::Executor, keyboard, simple_executor::SimpleExecutor},
+	trace, trace_function, trace_here,
+	virtio::{FRAME_ALLOCATOR, OsHal, PAGE_MAPPER, pci, pci::PciConfigIo},
+	virtio_debug, warn,
 };
-use bootloader::{BootInfo, entry_point};
-use core::{arch::asm, panic::PanicInfo};
-use conquer_once::spin::OnceCell;
 use spin::Mutex;
 use virtio_drivers::{
 	Hal, PhysAddr,
@@ -50,41 +43,50 @@ use zerocopy::IntoBytes;
 
 extern crate alloc;
 
-entry_point!(kernel_main);
+use creo::GLOBAL_FS;
 
-use blog_os::GLOBAL_FS;
+pub static BOOTLOADER_CONFIG: BootloaderConfig = {
+	let mut config = BootloaderConfig::new_default();
+	config.mappings.physical_memory = Some(Mapping::Dynamic);
+	config
+};
 
-fn kernel_main(boot_info: &'static BootInfo) -> ! {
+entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
+
+fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
+	let phy_offset_val = boot_info
+		.physical_memory_offset
+		.into_option()
+		.expect("Physical memory mapping failed in bootloader");
+
 	info!("Kernel starting up...");
 
 	info!("Boot Info Received:");
-	info!("  - Physical Memory Offset: {:#x}", boot_info.physical_memory_offset);
+	info!("  - Physical Memory Offset: {:#x}", phy_offset_val);
 	debug!("  - Memory Map:");
-	for region in boot_info.memory_map.iter() {
+	for region in boot_info.memory_regions.iter() {
 		debug!(
 			"    - Start: {:#010x}, End: {:#010x}, Size: {} KB, Type: {:?}",
-			region.range.start_addr(),
-			region.range.end_addr(),
-			region.range.end_addr().saturating_sub(region.range.start_addr()) / 1024,
-			region.region_type
+			region.start,
+			region.end,
+			region.end.saturating_sub(region.start) / 1024,
+			region.kind
 		);
 	}
 	info!("=================");
 
-	blog_os::init(); // for the exception things
+	creo::init(); // for the exception things
 	memory_debug!("Initializing memory subsystem...");
 
-	let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+	let phys_mem_offset = VirtAddr::new(phy_offset_val);
 
 	// Set the physical memory offset for VirtIO
-	unsafe {
-		blog_os::virtio::PHYSICAL_MEMORY_OFFSET = boot_info.physical_memory_offset;
-	}
-	virtio_debug!("Set physical memory offset: {:#x}", boot_info.physical_memory_offset);
+	unsafe { creo::virtio::PHYSICAL_MEMORY_OFFSET = phy_offset_val }
+	virtio_debug!("Set physical memory offset: {:#x}", phy_offset_val);
 
 	let mut mapper = unsafe { memory::init(phys_mem_offset) };
 	// get the physical frames that you wanna map
-	let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
+	let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
 	memory_debug!("Initialized frame allocator and page mapper");
 
 	*FRAME_ALLOCATOR.lock() = Some(frame_allocator);
@@ -161,8 +163,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
 		fs_debug!("Attempting cleanup of '{}'...", filename);
 		match fs.delete_file(filename) {
-			Ok(_) => { fs_debug!("Cleanup successful."); },
-			Err(_) => { fs_debug!("File not present, no cleanup needed."); },
+			Ok(_) => {
+				fs_debug!("Cleanup successful.");
+			},
+			Err(_) => {
+				fs_debug!("File not present, no cleanup needed.");
+			},
 		}
 
 		fs_debug!("Creating '{}'...", filename);
@@ -173,7 +179,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			},
 			Err(e) => {
 				error!("Failed to create file: {:?}", e);
-				blog_os::hlt_loop(); // Can't continue test
+				creo::hlt_loop(); // Can't continue test
 			},
 		};
 
@@ -183,7 +189,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			Ok(_) => info!("Content written successfully."),
 			Err(e) => {
 				error!("Failed to write to file: {:?}", e);
-				blog_os::hlt_loop(); // Can't continue test
+				creo::hlt_loop(); // Can't continue test
 			},
 		}
 
@@ -202,7 +208,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 			},
 			Err(e) => {
 				error!("Failed to read from file: {:?}", e);
-				blog_os::hlt_loop(); // Can't continue test
+				creo::hlt_loop(); // Can't continue test
 			},
 		}
 
@@ -228,15 +234,15 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 		// --- END SFS C-W-R-D TEST ---
 
 		info!("Moving filesystem to global static ... ");
-		GLOBAL_FS.try_init_once(|| Mutex::new(fs)).expect("Failed to initialize GLOBAL_FS");
+		GLOBAL_FS
+			.try_init_once(|| Mutex::new(fs))
+			.expect("Failed to initialize GLOBAL_FS");
 		// we need to make sure this transfer of file system happens other anything else attempts
 		// to use the filesystem for something
 		info!("Filesystem is now global");
-
 	} else {
 		error!("No VirtIO block device found!");
 	}
-
 
 	let mut executor = Executor::new();
 
@@ -246,7 +252,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	executor.run();
 
 	debug!("Kernel initialization complete - starting task executor");
-	blog_os::hlt_loop();
+	creo::hlt_loop();
 }
 
 // #[cfg(test)]
@@ -303,13 +309,13 @@ fn panic(info: &PanicInfo) -> ! {
 	}
 
 	// halt it forever,
-	blog_os::hlt_loop();
+	creo::hlt_loop();
 }
 
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	blog_os::test_panic_handler(info)
+	creo::test_panic_handler(info)
 }
 
 #[test_case]
@@ -319,8 +325,8 @@ fn one_one_assertion() {
 
 #[test_case]
 fn test_interrupt_handler() {
-    // Test that breakpoint exception works
-    x86_64::instructions::interrupts::int3(); // Should not panic
+	// Test that breakpoint exception works
+	x86_64::instructions::interrupts::int3(); // Should not panic
 }
 
 async fn async_number_69() -> u32 {

@@ -38,4 +38,4 @@ jobs:
         run: cargo install bootimage
 
       - name: Build project
-        run: cargo build --verbose --target x86_64-blog_os.json
+        run: cargo build --verbose --target x86_64-creo.json

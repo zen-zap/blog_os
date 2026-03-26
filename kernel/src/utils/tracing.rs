@@ -1,4 +1,4 @@
-//! Tracing and logging macros for blog_os
+//! Tracing and logging macros for creo
 //!
 //! This module provides structured logging macros that can be conditionally
 //! compiled based on feature flags. Perfect for OS development where traditional

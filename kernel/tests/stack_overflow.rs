@@ -3,14 +3,14 @@
 #![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
-use blog_os::serial_print;
+use creo::serial_print;
 
 #[no_mangle]
 pub extern "C" fn _start() -> !
 {
     serial_print!("stack_overflow::stack_overflow...\t");
 
-    blog_os::gdt::init();
+    creo::gdt::init();
 
     // make a custom double fault handler that does an exit_qemu(QemuExitCode::Success) instead of panicking
     init_test_idt();
@@ -23,7 +23,7 @@ pub extern "C" fn _start() -> !
 #[panic_handler]
 fn panic(info: &PanicInfo) -> !
 {
-    blog_os::test_panic_handler(info)
+    creo::test_panic_handler(info)
 }
 
 #[allow(unconditional_recursion)]
@@ -47,7 +47,7 @@ lazy_static! {
         unsafe {
             idt.double_fault
                 .set_handler_fn(test_double_fault_handler)
-                .set_stack_index(blog_os::gdt::DOUBLE_FAULT_IST_INDEX);
+                .set_stack_index(creo::gdt::DOUBLE_FAULT_IST_INDEX);
         }
 
         idt
@@ -60,7 +60,7 @@ pub fn init_test_idt()
 }
 
 
-use blog_os::{exit_qemu, QemuExitCode, serial_println};
+use creo::{exit_qemu, QemuExitCode, serial_println};
 use x86_64::structures::idt::InterruptStackFrame;
 
 extern "x86-interrupt" fn test_double_fault_handler(_stack_frame: InterruptStackFrame, _error_code: u64) -> !

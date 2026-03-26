@@ -1,4 +1,4 @@
-//! Simple File System (SFS) implementation for blog_os.
+//! Simple File System (SFS) implementation for creo.
 //!
 //! This module provides a basic Unix-like file system with the following features:
 //! - Superblock-based metadata tracking
@@ -23,6 +23,7 @@
 use super::{block_dev::BlockDevice, layout::*};
 use crate::fs::layout::FileType::File;
 use crate::println;
+use crate::virtio::OsHal;
 use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
 use core::convert::TryFrom;
@@ -31,7 +32,6 @@ use pc_keyboard::KeyCode::P;
 use virtio_drivers::device::blk::VirtIOBlk;
 use virtio_drivers::transport::pci::PciTransport;
 use zerocopy::{FromBytes, IntoBytes, KnownLayout, U16, U32, U64};
-use crate::virtio::OsHal;
 
 /// Magic number used to identify a valid SFS filesystem.
 /// Stored in the superblock for filesystem validation during mount.
@@ -806,7 +806,10 @@ impl<D: BlockDevice> SFS<D> {
 	/// - Writes "." entry pointing to itself
 	/// - Writes ".." entry pointing to root (inode 0)
 	/// - Updates root directory with new entry
-	fn create_directory_in_root(&mut self, name: &str) -> Result<u64, FileSystemError> {
+	fn create_directory_in_root(
+		&mut self,
+		name: &str,
+	) -> Result<u64, FileSystemError> {
 		if name.as_bytes().len() > DIR_NAME_MAX || name.is_empty() {
 			return Err(FileSystemError::NameTooLong);
 			// should also include empty one but meh .. fix sometime later
@@ -852,7 +855,7 @@ impl<D: BlockDevice> SFS<D> {
 			mode: FileType::Directory,
 			user_id: 0,
 			group_id: 0,
-			link_count: 2, // Starts with 2 (for . and parent's link to it)
+			link_count: 2,    // Starts with 2 (for . and parent's link to it)
 			size_in_bytes: 0, // Dirs don't really use this
 			last_access_time: 0,
 			last_modification_time: 0,
@@ -875,7 +878,12 @@ impl<D: BlockDevice> SFS<D> {
 			.write_blocks(new_data_block, &new_dir_block)
 			.map_err(|_| FileSystemError::BlockError)?;
 
-		self.write_dirent_into_block(&mut dir_block_buf, slot_index, new_inode_index, name.as_bytes())?;
+		self.write_dirent_into_block(
+			&mut dir_block_buf,
+			slot_index,
+			new_inode_index,
+			name.as_bytes(),
+		)?;
 
 		self.device
 			.write_blocks(dir_block_addr, &dir_block_buf)
@@ -978,9 +986,8 @@ impl<D: BlockDevice> SFS<D> {
 		let components = path.split('/').filter(|&s| !s.is_empty());
 
 		for comp in components {
-			let current_dir_inode = self
-				.read_inode(current_inode_num)
-				.map_err(|_| FileError::Corrupt)?;
+			let current_dir_inode =
+				self.read_inode(current_inode_num).map_err(|_| FileError::Corrupt)?;
 
 			let next_inode_num = self.find_entry_in_dir(&current_dir_inode, comp)?;
 			current_inode_num = next_inode_num;
@@ -1021,10 +1028,8 @@ impl<D: BlockDevice> SFS<D> {
 				} else {
 					(parent, basename)
 				}
-			}
-			None => {
-				(".", path)
-			}
+			},
+			None => (".", path),
 		}
 	}
 
@@ -1216,12 +1221,15 @@ impl<D: BlockDevice> SFS<D> {
 		&mut self,
 		parent_inode_num: u64,
 		filename: &str,
-	) -> Result<(
-		usize, /* slot index */
-		u64,   /* file inode num */
-		[u8; BLOCK_SIZE], /* parent dir block buffer */
-		u64    /* parent dir block address */
-	), FileError> {
+	) -> Result<
+		(
+			usize,            /* slot index */
+			u64,              /* file inode num */
+			[u8; BLOCK_SIZE], /* parent dir block buffer */
+			u64,              /* parent dir block address */
+		),
+		FileError,
+	> {
 		let parent_inode = self.read_inode(parent_inode_num).map_err(|_| FileError::Corrupt)?;
 		if parent_inode.mode != FileType::Directory {
 			return Err(FileError::Corrupt);
@@ -1326,7 +1334,12 @@ impl<D: BlockDevice> SFS<D> {
 			.map_err(|_| FileSystemError::BlockError)?;
 
 		// (Writing the entry into the parent block is identical)
-		self.write_dirent_into_block(&mut dir_block_buf, slot_index, new_inode_index, name.as_bytes())?;
+		self.write_dirent_into_block(
+			&mut dir_block_buf,
+			slot_index,
+			new_inode_index,
+			name.as_bytes(),
+		)?;
 
 		self.device
 			.write_blocks(dir_block_addr, &dir_block_buf)
@@ -1434,7 +1447,10 @@ pub trait FileSystem {
 	/// # Returns
 	/// * `Ok(Vec<String>)` - List of filenames in the directory
 	/// * `Err(FileError)` - If directory doesn't exist or cannot be read
-	fn list_file(&mut self, path: &str) -> Result<Vec<String>, FileError>;
+	fn list_file(
+		&mut self,
+		path: &str,
+	) -> Result<Vec<String>, FileError>;
 
 	/// Create a new directory
 	///
@@ -1487,9 +1503,8 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 
 		let parent_inode_num = self.find_inode_by_path(parent_path)?;
 
-		let (new_inode_index, _dir_block) = self
-			.create_file_in_dir(parent_inode_num, basename)
-			.map_err(|e| match e {
+		let (new_inode_index, _dir_block) =
+			self.create_file_in_dir(parent_inode_num, basename).map_err(|e| match e {
 				FileSystemError::NameTooLong => FileError::InvalidName,
 				FileSystemError::NoSpace => FileError::NoSpace,
 				FileSystemError::CorruptLayout => FileError::Corrupt,
@@ -1515,7 +1530,8 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		let (slot, inode_idx, mut dir_block, dir_blk_addr) =
 			self.find_entry_detailed(parent_inode_num, basename)?;
 
-		if inode_idx == 0 { // should not happen
+		if inode_idx == 0 {
+			// should not happen
 			return Err(FileError::FileNotFound);
 		}
 
@@ -1597,7 +1613,10 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		Ok(res)
 	}
 
-	fn create_directory(&mut self, path: &str) -> Result<(), FileError> {
+	fn create_directory(
+		&mut self,
+		path: &str,
+	) -> Result<(), FileError> {
 		let (parent_path, basename) = Self::parse_path(path);
 		if basename.is_empty() {
 			return Err(FileError::InvalidName);
@@ -1605,14 +1624,13 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 		// we need to find the inode of the parent directory
 		let parent_inode_num = self.find_inode_by_path(parent_path)?;
 		// create the directory in that parent
-		self.create_directory_in_dir(parent_inode_num, basename)
-			.map_err(|e| match e {
-				FileSystemError::NameTooLong => FileError::InvalidName,
-				FileSystemError::NoSpace => FileError::NoSpace,
-				FileSystemError::CorruptLayout => FileError::Corrupt,
-				FileSystemError::AlreadyExists => FileError::FileExists,
-				_ => FileError::CreationFailed,
-			})?;
+		self.create_directory_in_dir(parent_inode_num, basename).map_err(|e| match e {
+			FileSystemError::NameTooLong => FileError::InvalidName,
+			FileSystemError::NoSpace => FileError::NoSpace,
+			FileSystemError::CorruptLayout => FileError::Corrupt,
+			FileSystemError::AlreadyExists => FileError::FileExists,
+			_ => FileError::CreationFailed,
+		})?;
 
 		Ok(())
 	}
@@ -1675,10 +1693,10 @@ impl<D: BlockDevice> SFS<D> {
 		}
 
 		let data_block = inode.direct_pointers[0];
-		
+
 		let mut buf = [0u8; BLOCK_SIZE];
-		buf[.. bytes.len()].copy_from_slice(bytes);
-		
+		buf[..bytes.len()].copy_from_slice(bytes);
+
 		// wrote into the buffer
 		// now have to write this into disk
 		self.device
@@ -1692,7 +1710,7 @@ impl<D: BlockDevice> SFS<D> {
 		self.write_inode(inode, inode_idx).map_err(|_| FileError::BlockWriteError)?;
 		Ok(())
 	}
-	
+
 	/// Reads the entire content of a file as a UTF-8 string.
 	///
 	/// Reads the file's data from its first data block and returns it as a String.
@@ -1720,31 +1738,34 @@ impl<D: BlockDevice> SFS<D> {
 	/// - Only reads files up to one block (512 bytes)
 	/// - Requires content to be valid UTF-8
 	/// - Does not support multi-block files or indirect pointers
-	pub fn read_file(&mut self, handle: FileHandler) -> Result<String, FileError> {
+	pub fn read_file(
+		&mut self,
+		handle: FileHandler,
+	) -> Result<String, FileError> {
 		let inode_idx = handle.0 as u64;
 		let inode = self.read_inode(inode_idx).map_err(|_| FileError::Corrupt)?;
 		if inode.mode != FileType::File {
 			return Err(FileError::Corrupt);
 		}
-		
+
 		let sz = inode.size_in_bytes as usize;
 		if sz == 0 {
 			return Ok(String::new());
 		}
-		
+
 		let data_block = inode.direct_pointers[0];
 		if data_block == 0 {
 			return Err(FileError::Corrupt);
 		}
-		
+
 		let mut buf = [0u8; BLOCK_SIZE];
 		self.device
 			.read_blocks(data_block, &mut buf)
 			.map_err(|_| FileError::BlockReadError)?;
-		
+
 		let slice = &buf[..sz];
 		let s = core::str::from_utf8(slice).map_err(|_| FileError::Corrupt)?;
-		// should I make different types of corrupt? 
+		// should I make different types of corrupt?
 		// maybe some good verbose output for user would be better -- look for crates for this!
 		Ok(s.to_string())
 	}
