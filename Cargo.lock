@@ -3,27 +3,6 @@
 version = 4
 
 [[package]]
-name = "creo"
-version = "0.2.0"
-dependencies = [
- "bootloader_api",
- "conquer-once",
- "crossbeam-queue",
- "futures-util",
- "lazy_static",
- "linked_list_allocator",
- "pc-keyboard",
- "pic8259",
- "spin 0.5.2",
- "static_assertions",
- "uart_16550",
- "virtio-drivers",
- "volatile 0.2.7",
- "x86_64",
- "zerocopy",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -159,6 +138,27 @@ name = "crc-catalog"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5"
+
+[[package]]
+name = "creo"
+version = "0.2.0"
+dependencies = [
+ "bootloader_api",
+ "conquer-once",
+ "crossbeam-queue",
+ "futures-util",
+ "lazy_static",
+ "linked_list_allocator",
+ "pc-keyboard",
+ "pic8259",
+ "spin 0.5.2",
+ "static_assertions",
+ "uart_16550",
+ "virtio-drivers",
+ "volatile 0.2.7",
+ "x86_64",
+ "zerocopy",
+]
 
 [[package]]
 name = "crossbeam-queue"

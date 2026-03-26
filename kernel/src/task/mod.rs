@@ -3,6 +3,7 @@
 pub mod executor;
 pub mod keyboard;
 pub mod simple_executor;
+pub mod user;
 
 use alloc::boxed::Box;
 use core::{

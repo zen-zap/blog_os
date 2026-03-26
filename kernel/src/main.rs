@@ -20,7 +20,9 @@ use creo::{
 	memory::{self, BootInfoFrameAllocator, translate_addr},
 	memory_debug, pci_debug, print, println,
 	shell::shell_task,
-	task::{Task, executor::Executor, keyboard, simple_executor::SimpleExecutor},
+	task::{
+		Task, executor::Executor, keyboard, simple_executor::SimpleExecutor, user::enter_user_mode,
+	},
 	trace, trace_function, trace_here,
 	virtio::{FRAME_ALLOCATOR, OsHal, PAGE_MAPPER, pci, pci::PciConfigIo},
 	virtio_debug, warn,
@@ -45,6 +47,8 @@ extern crate alloc;
 
 use creo::GLOBAL_FS;
 
+const RUN_FILESYSTEM_SELF_CHECK: bool = false;
+
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 	let mut config = BootloaderConfig::new_default();
 	config.mappings.physical_memory = Some(Mapping::Dynamic);
@@ -52,6 +56,81 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 };
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
+
+fn run_filesystem_self_check(fs: &mut GLOBALFSType) {
+	info!("--- Starting SFS C-W-R-D Test ---");
+	let filename = "test.txt";
+
+	fs_debug!("Attempting cleanup of '{}'...", filename);
+	match fs.delete_file(filename) {
+		Ok(_) => {
+			fs_debug!("Cleanup successful.");
+		},
+		Err(_) => {
+			fs_debug!("File not present, no cleanup needed.");
+		},
+	}
+
+	fs_debug!("Creating '{}'...", filename);
+	let handle = match fs.create_file(filename) {
+		Ok(h) => {
+			info!("File created successfully with handle {:?}", h);
+			h
+		},
+		Err(e) => {
+			error!("Failed to create file: {:?}", e);
+			creo::hlt_loop();
+		},
+	};
+
+	let lines_to_write = &["Hello from your SFS!", "This is the second line."];
+	fs_debug!("Writing content to file...");
+	match fs.write_file_lines(handle, lines_to_write) {
+		Ok(_) => info!("Content written successfully."),
+		Err(e) => {
+			error!("Failed to write to file: {:?}", e);
+			creo::hlt_loop();
+		},
+	}
+
+	fs_debug!("Reading content back from file...");
+	match fs.read_file(handle) {
+		Ok(content) => {
+			info!("Read success! Content:\n---\n{}\n---", content);
+
+			let expected_content = lines_to_write.join("\n");
+			if content == expected_content {
+				info!("Verification SUCCESS: Content matches!");
+			} else {
+				error!("Verification FAILED: Content mismatch!");
+			}
+		},
+		Err(e) => {
+			error!("Failed to read from file: {:?}", e);
+			creo::hlt_loop();
+		},
+	}
+
+	fs_debug!("Listing root directory...");
+	match fs.list_file(".") {
+		Ok(files) => info!("Files in root: {:?}", files),
+		Err(e) => error!("Failed to list files: {:?}", e),
+	}
+
+	fs_debug!("Deleting '{}'...", filename);
+	match fs.delete_file(filename) {
+		Ok(_) => info!("File deleted successfully."),
+		Err(e) => error!("Failed to delete file: {:?}", e),
+	}
+
+	fs_debug!("Listing root directory after delete...");
+	match fs.list_file(".") {
+		Ok(files) => info!("Files in root: {:?}", files),
+		Err(e) => error!("Failed to list files: {:?}", e),
+	}
+
+	info!("--- SFS Test Complete ---");
+}
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 	let phy_offset_val = boot_info
@@ -157,88 +236,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 			},
 		};
 
-		// --- BEGIN SFS C-W-R-D TEST ---
-		info!("--- Starting SFS C-W-R-D Test ---");
-		let filename = "test.txt";
-
-		fs_debug!("Attempting cleanup of '{}'...", filename);
-		match fs.delete_file(filename) {
-			Ok(_) => {
-				fs_debug!("Cleanup successful.");
-			},
-			Err(_) => {
-				fs_debug!("File not present, no cleanup needed.");
-			},
+		if RUN_FILESYSTEM_SELF_CHECK {
+			run_filesystem_self_check(&mut fs);
 		}
-
-		fs_debug!("Creating '{}'...", filename);
-		let handle = match fs.create_file(filename) {
-			Ok(h) => {
-				info!("File created successfully with handle {:?}", h);
-				h
-			},
-			Err(e) => {
-				error!("Failed to create file: {:?}", e);
-				creo::hlt_loop(); // Can't continue test
-			},
-		};
-
-		let lines_to_write = &["Hello from your SFS!", "This is the second line."];
-		fs_debug!("Writing content to file...");
-		match fs.write_file_lines(handle, lines_to_write) {
-			Ok(_) => info!("Content written successfully."),
-			Err(e) => {
-				error!("Failed to write to file: {:?}", e);
-				creo::hlt_loop(); // Can't continue test
-			},
-		}
-
-		fs_debug!("Reading content back from file...");
-		match fs.read_file(handle) {
-			Ok(content) => {
-				info!("Read success! Content:\n---\n{}\n---", content);
-
-				// Verification check
-				let expected_content = lines_to_write.join("\n");
-				if content == expected_content {
-					info!("Verification SUCCESS: Content matches!");
-				} else {
-					error!("Verification FAILED: Content mismatch!");
-				}
-			},
-			Err(e) => {
-				error!("Failed to read from file: {:?}", e);
-				creo::hlt_loop(); // Can't continue test
-			},
-		}
-
-		fs_debug!("Listing root directory...");
-		match fs.list_file(".") {
-			Ok(files) => info!("Files in root: {:?}", files),
-			Err(e) => error!("Failed to list files: {:?}", e),
-		}
-
-		fs_debug!("Deleting '{}'...", filename);
-		match fs.delete_file(filename) {
-			Ok(_) => info!("File deleted successfully."),
-			Err(e) => error!("Failed to delete file: {:?}", e),
-		}
-
-		fs_debug!("Listing root directory after delete...");
-		match fs.list_file(".") {
-			Ok(files) => info!("Files in root: {:?}", files),
-			Err(e) => error!("Failed to list files: {:?}", e),
-		}
-
-		info!("--- SFS Test Complete ---");
-		// --- END SFS C-W-R-D TEST ---
 
 		info!("Moving filesystem to global static ... ");
 		GLOBAL_FS
 			.try_init_once(|| Mutex::new(fs))
 			.expect("Failed to initialize GLOBAL_FS");
-		// we need to make sure this transfer of file system happens other anything else attempts
-		// to use the filesystem for something
+
 		info!("Filesystem is now global");
 	} else {
 		error!("No VirtIO block device found!");
@@ -246,38 +252,50 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
 	let mut executor = Executor::new();
 
-	executor.spawn(Task::new(example_task()));
-	/*executor.spawn(Task::new(keyboard::print_keypresses()));*/
-	executor.spawn(Task::new(shell_task::run_shell_task()));
-	executor.run();
+	creo::info!("Attempting to jump to Ring 3 User Mode");
+
+	let mut user_code = creo::gdt::GDT.1.user_code_selector;
+	let mut user_data = creo::gdt::GDT.1.user_data_selector;
+
+	// setting the requested privilege level to 3
+	user_code.0 |= 3;
+	user_data.0 |= 3;
+
+	static mut USER_STACK: [u8; 4096] = [0; 4096];
+	let user_stack_ptr = unsafe { USER_STACK.as_ptr() as u64 + 4096 };
+
+	// dummy user application
+	extern "C" fn user_application() {
+		// in ring 3 now!
+		loop {}
+	}
+
+	unsafe {
+		enter_user_mode(
+			user_code.0,
+			user_data.0,
+			user_application as *const () as u64,
+			user_stack_ptr,
+		);
+	}
+
+	creo::info!("This line should not print!");
 
 	debug!("Kernel initialization complete - starting task executor");
+	executor.run();
+
 	creo::hlt_loop();
 }
 
-// #[cfg(test)]
-// fn maybe_run_tests() {
-// 	// When running `cargo test` the harness provides `test_main`
-// 	// via `#![reexport_test_harness_main = "test_main"]`.
-// 	test_main();
-// }
-//
-// // no op in normal boot
-// #[cfg(not(test))]
-// fn maybe_run_tests() {}
-//
-
-/// our panic handler in general mode
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
 	error!("KERNEL PANIC: {}\n", info);
 
-	// reading RIP [current instruction pointer]
 	let rip: u64;
 	unsafe {
 		asm!(
-			"lea {rip}, [rip]", // load the effective address of the next instruction
+			"lea {rip}, [rip]",
 			rip = out(reg) rip,
 			options(nomem, nostack, preserves_flags),
 		);
@@ -285,7 +303,6 @@ fn panic(info: &PanicInfo) -> ! {
 
 	error!("RIP: {:#018x}", rip);
 
-	// stack backtrace
 	error!("\nStack Backtrace:");
 	let mut rbp: u64;
 	unsafe {
@@ -299,16 +316,13 @@ fn panic(info: &PanicInfo) -> ! {
 	let mut stack_trace_count = 0;
 
 	while rbp != 0 && stack_trace_count < 20 {
-		// return address is saved at [RBP + 8]
 		let ret = unsafe { *((rbp + 8) as *const u64) };
 		error!("  {:#018x}", ret);
-		// the previous frame's RBP is at [RBP]
 		rbp = unsafe { *(rbp as *const u64) };
 
 		stack_trace_count += 1;
 	}
 
-	// halt it forever,
 	creo::hlt_loop();
 }
 
@@ -325,8 +339,7 @@ fn one_one_assertion() {
 
 #[test_case]
 fn test_interrupt_handler() {
-	// Test that breakpoint exception works
-	x86_64::instructions::interrupts::int3(); // Should not panic
+	x86_64::instructions::interrupts::int3();
 }
 
 async fn async_number_69() -> u32 {
