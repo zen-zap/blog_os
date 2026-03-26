@@ -150,14 +150,11 @@ impl<D: BlockDevice> SFS<D> {
 	/// - Bitmap blocks must be at expected locations
 	/// - Data block range must not exceed total blocks
 	pub fn mount(mut device: D) -> Result<Self, FileSystemError> {
-		println!("[FS] Mounting File System");
 		let mut buffer = [0u8; BLOCK_SIZE];
 
 		device
 			.read_blocks(SUPERBLOCK_BLOCK, &mut buffer)
 			.map_err(|_| FileSystemError::InvalidSuperBlock)?;
-
-		println!("[FS] Read into buffer {:?}", buffer);
 
 		let size = size_of::<DiskSuperBlock>();
 		let disk_superblock = DiskSuperBlock::ref_from_bytes(&buffer[..size])
@@ -645,7 +642,6 @@ impl<D: BlockDevice> SFS<D> {
 			if is_used {
 				let entry_name_len = entry.name_len.get() as usize;
 				if &entry.name[..entry_name_len] == name.as_bytes() {
-					println!("[FS] File with same name found");
 					return Err(FileSystemError::AlreadyExists); // use FileError::FileExists at
 					// call site
 				}
@@ -743,7 +739,6 @@ impl<D: BlockDevice> SFS<D> {
 			if is_used {
 				let entry_name_len = entry.name_len.get() as usize;
 				if &entry.name[..entry_name_len] == filename.as_bytes() {
-					println!("[FS] File with same name found");
 					return Err(FileSystemError::AlreadyExists);
 				}
 			} else if empty_slot_index.is_none() {
@@ -838,7 +833,6 @@ impl<D: BlockDevice> SFS<D> {
 			if is_used {
 				let entry_name_len = entry.name_len.get() as usize;
 				if &entry.name[..entry_name_len] == name.as_bytes() {
-					println!("[FS] Directory with same name found");
 					return Err(FileSystemError::AlreadyExists);
 				}
 			} else if empty_slot_index.is_none() {
@@ -889,7 +883,6 @@ impl<D: BlockDevice> SFS<D> {
 			.write_blocks(dir_block_addr, &dir_block_buf)
 			.map_err(|_| FileSystemError::BlockError)?;
 
-		println!("[FS] Created directory '{}' with inode #{}", name, new_inode_index);
 		Ok(new_inode_index)
 	}
 
@@ -1260,10 +1253,10 @@ impl<D: BlockDevice> SFS<D> {
 		Err(FileError::FileNotFound)
 	}
 
-	/// generalised `create_directory_in_root`
+	/// generalized `create_directory_in_root`
 	fn create_directory_in_dir(
 		&mut self,
-		parent_inode_num: u64, // The only new parameter
+		parent_inode_num: u64,
 		name: &str,
 	) -> Result<u64, FileSystemError> {
 		if name.as_bytes().len() > DIR_NAME_MAX || name.is_empty() {
@@ -1294,7 +1287,6 @@ impl<D: BlockDevice> SFS<D> {
 			if is_used {
 				let entry_name_len = entry.name_len.get() as usize;
 				if &entry.name[..entry_name_len] == name.as_bytes() {
-					println!("[FS] Directory with same name found");
 					return Err(FileSystemError::AlreadyExists);
 				}
 			} else if empty_slot_index.is_none() {
@@ -1345,7 +1337,6 @@ impl<D: BlockDevice> SFS<D> {
 			.write_blocks(dir_block_addr, &dir_block_buf)
 			.map_err(|_| FileSystemError::BlockError)?;
 
-		println!("[FS] Created directory '{}' with inode #{}", name, new_inode_index);
 		Ok(new_inode_index)
 	}
 }
@@ -1512,7 +1503,6 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 				_ => FileError::CreationFailed,
 			})?;
 
-		println!("[FS] Created file '{}' with inode #{}", path, new_inode_index);
 		Ok(FileHandler(new_inode_index as usize))
 	}
 
@@ -1560,7 +1550,6 @@ impl<D: BlockDevice> FileSystem for SFS<D> {
 			.write_blocks(dir_blk_addr, &dir_block)
 			.map_err(|_| FileError::BlockWriteError)?;
 
-		println!("[FS] Deleted file '{}' (inode #{})", path, inode_idx);
 		Ok(())
 	}
 

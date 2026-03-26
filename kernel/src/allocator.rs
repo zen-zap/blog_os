@@ -1,4 +1,4 @@
-// in src/allocator.rs
+// in kernel/src/allocator.rs
 
 use alloc::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
@@ -36,14 +36,6 @@ unsafe impl GlobalAlloc for Dummy {
 	}
 }
 
-/// Okay so that was it for the allocator .. now you gotta tell the compiler to use this
-//#[global_allocator]
-//static ALLOCATOR: Dummy = Dummy;
-
-/// This thing is protected by a Spinlock or Mutex to avoid deadlocks
-// #[global_allocator]
-// static ALLOCATOR: LockedHeap = LockedHeap::empty();
-
 // Above we did the HEAP_START using some address from virtual memory .. but that would give a
 // page_fault unless we map our virtual memory to some physical memory
 use x86_64::{
@@ -52,15 +44,6 @@ use x86_64::{
 		FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB, mapper::MapToError,
 	},
 };
-
-/*
- * VERY CRUCIAL DETAIL:
- *
- * You map the entire physical memory to some range in virtual memory ...
- * Sometimes, the virtual memory you use might not be mapped to some physical memory.
- * You gotta map that and then use it
- *
- **/
 
 /// function to initialize the heap for the allocator
 ///
@@ -139,3 +122,4 @@ use fixed_size_block::FixedSizeBlockAllocator;
 /// Heap memory is separately allocated a contiguous region of the virtual memory
 #[global_allocator]
 static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
+

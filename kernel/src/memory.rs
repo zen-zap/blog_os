@@ -1,15 +1,18 @@
 // in src/memory.rs
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
+use virtio_drivers::device::console::Size;
 use x86_64::{
 	PhysAddr, VirtAddr,
 	registers::control::Cr3,
 	structures::paging::page_table::FrameError,
 	structures::paging::{
 		FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags as Flags,
-		PhysFrame, Size4KiB,
+		PhysFrame, Size4KiB, mapper::MapToError,
 	},
 };
+
+use crate::GLOBAL_FS;
 
 /// Returns a mutable reference to the active level 4 table.
 ///
@@ -158,4 +161,24 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
 		self.next += 1;
 		frame
 	}
+}
+
+/// Allocates a physical frame and maps it to the given virtual address
+/// with Ring 3 permissions for User Mode.
+pub unsafe fn map_user_page(
+	mapper: &mut impl Mapper<Size4KiB>,
+	frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+	addr: VirtAddr,
+) -> Result<(), MapToError<Size4KiB>> {
+	let page = Page::containing_address(addr);
+
+	let frame = frame_allocator.allocate_frame().ok_or(MapToError::FrameAllocationFailed)?;
+
+	let flags = Flags::PRESENT | Flags::WRITABLE | Flags::USER_ACCESSIBLE;
+
+	unsafe {
+		mapper.map_to(page, frame, flags, frame_allocator)?.flush();
+	}
+
+	Ok(())
 }

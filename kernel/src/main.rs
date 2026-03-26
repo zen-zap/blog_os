@@ -33,7 +33,7 @@ use virtio_drivers::{
 	device::blk::VirtIOBlk,
 	transport::{
 		mmio::VirtIOHeader,
-		pci::{PciTransport, bus::PciRoot},
+		pci::{PciTransport, VirtioPciError, bus::PciRoot},
 	},
 };
 use x86_64::{
@@ -138,9 +138,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 		.into_option()
 		.expect("Physical memory mapping failed in bootloader");
 
-	info!("Kernel starting up...");
-
-	info!("Boot Info Received:");
 	info!("  - Physical Memory Offset: {:#x}", phy_offset_val);
 	debug!("  - Memory Map:");
 	for region in boot_info.memory_regions.iter() {
@@ -155,18 +152,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 	info!("=================");
 
 	creo::init(); // for the exception things
-	memory_debug!("Initializing memory subsystem...");
 
 	let phys_mem_offset = VirtAddr::new(phy_offset_val);
 
 	// Set the physical memory offset for VirtIO
 	unsafe { creo::virtio::PHYSICAL_MEMORY_OFFSET = phy_offset_val }
-	virtio_debug!("Set physical memory offset: {:#x}", phy_offset_val);
 
 	let mut mapper = unsafe { memory::init(phys_mem_offset) };
 	// get the physical frames that you wanna map
 	let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
-	memory_debug!("Initialized frame allocator and page mapper");
 
 	*FRAME_ALLOCATOR.lock() = Some(frame_allocator);
 	*PAGE_MAPPER.lock() = Some(mapper);
@@ -178,9 +172,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 		allocator::init_heap(mapper_lock.as_mut().unwrap(), allocator_lock.as_mut().unwrap())
 			.expect("heap initialization failed!");
 	}
-	memory_debug!("Heap initialization completed");
 
-	info!("Initializing PCI and finding devices");
 	let pci_config_access = PciConfigIo;
 	let mut pci_root = PciRoot::new(pci_config_access);
 
@@ -189,33 +181,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 		let transport = PciTransport::new::<OsHal, _>(&mut pci_root_mut, device_function)
 			.expect("Failed to create PCI transport");
 
-		info!("PCI transport created successfully");
-
 		let mut blk_dev =
 			VirtIOBlk::<OsHal, _>::new(transport).expect("failed to create blk driver");
 
-		info!("Block Device Initialized! Capacity: {} sectors", blk_dev.capacity());
-
-		// 1. Create a buffer for one sector (512 bytes).
-		let mut buffer = [0u8; 512];
-
-		// 2. Call the simple, blocking read_blocks method.
-		// This function will not return until the read is complete.
-		virtio_debug!("Reading block 0...");
-		blk_dev.read_blocks(0, &mut buffer).expect("read_blocks failed");
-
-		// 3. The data is now in the buffer.
-		virtio_debug!("Successfully read block 0! (First 16 bytes: {:02x?})", &buffer[0..16]);
-
-		// Removed the tests on the blocks here since they corrupted the superblock
-
-		info!("Initializing Simple File System...");
-
 		let mut fs = match SFS::mount(blk_dev) {
-			Ok(fs) => {
-				info!("Filesystem mounted successfully");
-				fs
-			},
+			Ok(fs) => fs,
 			Err(_) => {
 				warn!("Mount failed or filesystem not found! Formatting disk...");
 
@@ -240,46 +210,70 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 			run_filesystem_self_check(&mut fs);
 		}
 
-		info!("Moving filesystem to global static ... ");
 		GLOBAL_FS
 			.try_init_once(|| Mutex::new(fs))
 			.expect("Failed to initialize GLOBAL_FS");
-
-		info!("Filesystem is now global");
 	} else {
 		error!("No VirtIO block device found!");
 	}
 
 	let mut executor = Executor::new();
 
-	creo::info!("Attempting to jump to Ring 3 User Mode");
+	creo::info!("Allocating User Space Memory");
+
+	let user_code_addr = VirtAddr::new(0x_0000_2000_0000);
+	let user_stack_addr = VirtAddr::new(0x_0000_2000_1000);
+	// 4KiB away -- standard size of a memory page
+
+	let mut mapper_lock = creo::virtio::PAGE_MAPPER.lock();
+	let mut allocator_lock = creo::virtio::FRAME_ALLOCATOR.lock();
+
+	unsafe {
+		creo::memory::map_user_page(
+			mapper_lock.as_mut().unwrap(),
+			allocator_lock.as_mut().unwrap(),
+			user_code_addr,
+		)
+		.expect("Failed to map user code page");
+
+		creo::memory::map_user_page(
+			mapper_lock.as_mut().unwrap(),
+			allocator_lock.as_mut().unwrap(),
+			user_stack_addr,
+		)
+		.expect("Failed to map user stack page");
+	}
+
+	drop(mapper_lock);
+	drop(allocator_lock);
+
+	creo::info!("Writing User Space Application");
+
+	// this is the machine code for `jmp $` -- an infinite loop
+	unsafe {
+		let code_ptr = user_code_addr.as_mut_ptr::<u8>();
+		code_ptr.write(0xEB);
+		code_ptr.add(1).write(0xFE);
+	}
+
+	let user_stack_ptr = user_stack_addr.as_u64() + 4096;
+
+	creo::info!("Executing jump to Ring 3");
 
 	let mut user_code = creo::gdt::GDT.1.user_code_selector;
 	let mut user_data = creo::gdt::GDT.1.user_data_selector;
 
-	// setting the requested privilege level to 3
 	user_code.0 |= 3;
 	user_data.0 |= 3;
 
-	static mut USER_STACK: [u8; 4096] = [0; 4096];
-	let user_stack_ptr = unsafe { USER_STACK.as_ptr() as u64 + 4096 };
-
-	// dummy user application
-	extern "C" fn user_application() {
-		// in ring 3 now!
-		loop {}
-	}
-
 	unsafe {
-		enter_user_mode(
+		creo::task::user::enter_user_mode(
 			user_code.0,
 			user_data.0,
-			user_application as *const () as u64,
+			user_code_addr.as_u64(),
 			user_stack_ptr,
 		);
 	}
-
-	creo::info!("This line should not print!");
 
 	debug!("Kernel initialization complete - starting task executor");
 	executor.run();
