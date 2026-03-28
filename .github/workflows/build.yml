@@ -5,6 +5,7 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  workflow_dispatch:
 
 jobs:
   build_and_test:
@@ -18,8 +19,18 @@ jobs:
       - name: Setup Nightly Rust
         uses: dtolnay/rust-toolchain@nightly
         with:
-          components: rust-src
+          components: rust-src, llvm-tools-preview, clippy, rustfmt 
           targets: x86_64-unknown-none
+
+      - name: Cache Cargo Registry and Build
+        uses: Swatinem/rust-cache@v2
+
+      # - name: Check Formatting
+      #   run: cargo fmt --all -- --check
+
+      # - name: Run Clippy
+      #   # -- -D warnings turns all warnings into errors, so the CI will fail if there are any clippy warnings. Add it later.
+      #   run: cargo clippy --package creo --target x86_64-unknown-none
 
       - name: Cache Cargo Registry and Build
         uses: Swatinem/rust-cache@v2
@@ -34,9 +45,7 @@ jobs:
         run: cargo build --package builder
 
       - name: Boot Test (60 Second Timeout)
-        # Runs the OS. The 'timeout' command will kill QEMU after 60s, returning code 124 on success.
-        # We catch 124 and exit 0 (success) so the CI passes.
         run: |
           timeout 60s cargo run --bin builder || if [ $? -eq 124 ]; then exit 0; else exit 1; fi
         env:
-          CI: "true" # Tells our builder to run without a GUI
+          CI: "true"
