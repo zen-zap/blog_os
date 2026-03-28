@@ -103,9 +103,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 	fs::filesystem::init_filesystem();
 
 	let mut executor = Executor::new();
+	executor.spawn(Task::new(creo::shell::shell_task::run_shell_task()));
 	debug!("Kernel initialization complete.");
 
-	enter_ring_3();
+	// enter_ring_3();
 
 	executor.run();
 

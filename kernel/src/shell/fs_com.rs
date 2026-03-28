@@ -1,20 +1,33 @@
+//! in kernel/src/shell_task.rs
+//!
+//! File System Commands (FSC)
+//!
+//! This module provides a stateless utility for executing standard file system
+//! commands (like `ls`, `cat`, `rm`). It acts as a bridge between the user shell
+//! and the underlying Simple File System (SFS).
+
 use crate::fs::simple_fs::FileSystem;
-use crate::{GLOBALFSType, error, info, print, println, task::keyboard};
-use alloc::string::{String, ToString};
+use crate::{GLOBALFSType, error, info, println};
 use alloc::vec::Vec;
-use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
 use spin::Mutex;
 
-/// Struct to manage all the file system commands
+/// A stateless utility struct for executing file system commands.
 #[derive(Default)]
 pub struct Fsc;
 
 impl Fsc {
+	/// Creates a new instance of the File System Command utility.
 	pub fn new() -> Self {
 		Fsc
 	}
+
+	/// Lists the contents of a directory.
+	///
+	/// # Arguments
+	/// * `path` - The directory path to list.
+	/// * `fs_mutex` - A reference to the global file system mutex.
 	pub fn ls(
-		&mut self,
+		&self,
 		path: &str,
 		fs_mutex: &Mutex<GLOBALFSType>,
 	) {
@@ -22,8 +35,12 @@ impl Fsc {
 			println!("Usage: ls <path>");
 			return;
 		}
+
 		let mut fs = fs_mutex.lock();
-		match fs.list_file(path) {
+		let result = fs.list_file(path);
+		drop(fs); // Explicitly release the lock before doing slow VGA/Serial printing
+
+		match result {
 			Ok(files) => {
 				for file in files {
 					println!("{}", file);
@@ -33,8 +50,13 @@ impl Fsc {
 		}
 	}
 
+	/// Creates a new, empty file.
+	///
+	/// # Arguments
+	/// * `path` - The path of the file to create.
+	/// * `fs_mutex` - A reference to the global file system mutex.
 	pub fn touch(
-		&mut self,
+		&self,
 		path: &str,
 		fs_mutex: &Mutex<GLOBALFSType>,
 	) {
@@ -42,17 +64,24 @@ impl Fsc {
 			println!("Usage: touch <path>");
 			return;
 		}
+
 		let mut fs = fs_mutex.lock();
-		match fs.create_file(path) {
+		let result = fs.create_file(path);
+		drop(fs);
+
+		match result {
 			Ok(_) => info!("Created '{}'", path),
 			Err(e) => error!("touch failed: {:?}", e),
 		}
-
-		// the lock is hopefully dropped here
 	}
 
+	/// Creates a new directory.
+	///
+	/// # Arguments
+	/// * `path` - The path of the directory to create.
+	/// * `fs_mutex` - A reference to the global file system mutex.
 	pub fn mkdir(
-		&mut self,
+		&self,
 		path: &str,
 		fs_mutex: &Mutex<GLOBALFSType>,
 	) {
@@ -60,15 +89,24 @@ impl Fsc {
 			println!("Usage: mkdir <path>");
 			return;
 		}
+
 		let mut fs = fs_mutex.lock();
-		match fs.create_directory(path) {
+		let result = fs.create_directory(path);
+		drop(fs);
+
+		match result {
 			Ok(_) => info!("Created directory '{}'", path),
 			Err(e) => error!("mkdir failed: {:?}", e),
 		}
 	}
 
+	/// Deletes a file from the file system.
+	///
+	/// # Arguments
+	/// * `path` - The path of the file to delete.
+	/// * `fs_mutex` - A reference to the global file system mutex.
 	pub fn rm(
-		&mut self,
+		&self,
 		path: &str,
 		fs_mutex: &Mutex<GLOBALFSType>,
 	) {
@@ -76,15 +114,24 @@ impl Fsc {
 			println!("Usage: rm <path>");
 			return;
 		}
+
 		let mut fs = fs_mutex.lock();
-		match fs.delete_file(path) {
+		let result = fs.delete_file(path);
+		drop(fs);
+
+		match result {
 			Ok(_) => info!("Deleted '{}'", path),
 			Err(e) => error!("rm failed: {:?}", e),
 		}
 	}
 
+	/// Reads and prints the contents of a file.
+	///
+	/// # Arguments
+	/// * `path` - The path of the file to read.
+	/// * `fs_mutex` - A reference to the global file system mutex.
 	pub fn cat(
-		&mut self,
+		&self,
 		path: &str,
 		fs_mutex: &Mutex<GLOBALFSType>,
 	) {
@@ -92,40 +139,65 @@ impl Fsc {
 			println!("Usage: cat <path>");
 			return;
 		}
+
 		let mut fs = fs_mutex.lock();
-		match fs.open_file(path) {
-			Ok(handle) => match fs.read_file(handle) {
-				Ok(content) => println!("{}", content),
-				Err(e) => error!("cat: read failed: {:?}", e),
+		let handle_result = fs.open_file(path);
+
+		match handle_result {
+			Ok(handle) => {
+				let read_result = fs.read_file(handle);
+				drop(fs); // Lock released; safe to print large text chunks
+
+				match read_result {
+					Ok(content) => println!("{}", content),
+					Err(e) => error!("cat: read failed: {:?}", e),
+				}
 			},
-			Err(e) => error!("cat: open failed: {:?}", e),
+			Err(e) => {
+				drop(fs);
+				error!("cat: open failed: {:?}", e);
+			},
 		}
 	}
+
+	/// Writes lines of text to a file, creating it if it does not exist.
+	///
+	/// # Arguments
+	/// * `path` - The path of the file to write to.
+	/// * `lines` - A slice containing string references representing lines of text.
+	/// * `fs_mutex` - A reference to the global file system mutex.
 	pub fn write(
-		&mut self,
+		&self,
 		path: &str,
-		lines: &Vec<&str>,
+		lines: &[&str],
 		fs_mutex: &Mutex<GLOBALFSType>,
 	) {
 		if path.is_empty() {
 			println!("Usage: write <path> [content]");
 			return;
 		}
+
 		let mut fs = fs_mutex.lock();
+
 		let handle = match fs.open_file(path) {
 			Ok(h) => h,
 			Err(_) => match fs.create_file(path) {
 				Ok(h) => h,
 				Err(e) => {
+					drop(fs);
 					error!("write: could not create file: {:?}", e);
 					return;
 				},
 			},
 		};
 
-		match fs.write_file_lines(handle, &lines) {
+		let write_result = fs.write_file_lines(handle, lines);
+		drop(fs);
+
+		match write_result {
 			Ok(_) => info!("Wrote to '{}'", path),
 			Err(e) => error!("write failed: {:?}", e),
 		}
 	}
 }
+

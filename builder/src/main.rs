@@ -34,17 +34,18 @@ fn main() {
 	cmd.arg("-drive").arg(format!("format=raw,file={}", bios_path.display()));
 	cmd.arg("-drive").arg("file=disk.img,format=raw,if=none,id=disk0");
 	cmd.arg("-device").arg("virtio-blk-pci,drive=disk0");
+	cmd.arg("-device").arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
 	cmd.arg("-m").arg("256M");
 
 	// headless aware for CI
 	if std::env::var("CI").is_ok() {
-        cmd.arg("-display").arg("none");
-    } else {
-        cmd.arg("-display").arg("gtk,zoom-to-fit=on");
-        cmd.arg("-vga").arg("std");
-        cmd.arg("-global").arg("VGA.xres=1280");
-        cmd.arg("-global").arg("VGA.yres=800");
-    }
+		cmd.arg("-display").arg("none");
+	} else {
+		cmd.arg("-display").arg("gtk,zoom-to-fit=on");
+		cmd.arg("-vga").arg("std");
+		cmd.arg("-global").arg("VGA.xres=1280");
+		cmd.arg("-global").arg("VGA.yres=800");
+	}
 
 	// pipe to serial port
 	cmd.arg("-serial").arg("stdio");

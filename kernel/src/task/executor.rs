@@ -34,6 +34,7 @@ impl Executor {
 		self.task_queue.push(task_id).expect("queue full");
 	}
 
+	/// This should not return.
 	pub fn run(&mut self) -> ! {
 		loop {
 			self.run_ready_tasks();
