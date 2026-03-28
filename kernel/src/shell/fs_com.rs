@@ -1,19 +1,23 @@
-use crate::{println, print, task::keyboard, error, info, GLOBALFSType};
+use crate::fs::simple_fs::FileSystem;
+use crate::{GLOBALFSType, error, info, print, println, task::keyboard};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, KeyCode, ScancodeSet1};
+use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
 use spin::Mutex;
-// to call the methods we need to import this
-use crate::fs::simple_fs::FileSystem;
 
 /// Struct to manage all the file system commands
+#[derive(Default)]
 pub struct Fsc;
 
 impl Fsc {
 	pub fn new() -> Self {
 		Fsc
 	}
-	pub fn ls(&mut self, path: &str, fs_mutex: &Mutex<GLOBALFSType>) {
+	pub fn ls(
+		&mut self,
+		path: &str,
+		fs_mutex: &Mutex<GLOBALFSType>,
+	) {
 		if path.is_empty() {
 			println!("Usage: ls <path>");
 			return;
@@ -24,12 +28,16 @@ impl Fsc {
 				for file in files {
 					println!("{}", file);
 				}
-			}
+			},
 			Err(e) => error!("ls failed: {:?}", e),
 		}
 	}
 
-	pub fn touch(&mut self, path: &str, fs_mutex: &Mutex<GLOBALFSType>) {
+	pub fn touch(
+		&mut self,
+		path: &str,
+		fs_mutex: &Mutex<GLOBALFSType>,
+	) {
 		if path.is_empty() {
 			println!("Usage: touch <path>");
 			return;
@@ -43,7 +51,11 @@ impl Fsc {
 		// the lock is hopefully dropped here
 	}
 
-	pub fn mkdir(&mut self, path: &str, fs_mutex: &Mutex<GLOBALFSType>) {
+	pub fn mkdir(
+		&mut self,
+		path: &str,
+		fs_mutex: &Mutex<GLOBALFSType>,
+	) {
 		if path.is_empty() {
 			println!("Usage: mkdir <path>");
 			return;
@@ -55,7 +67,11 @@ impl Fsc {
 		}
 	}
 
-	pub fn rm(&mut self, path: &str, fs_mutex: &Mutex<GLOBALFSType>) {
+	pub fn rm(
+		&mut self,
+		path: &str,
+		fs_mutex: &Mutex<GLOBALFSType>,
+	) {
 		if path.is_empty() {
 			println!("Usage: rm <path>");
 			return;
@@ -67,24 +83,30 @@ impl Fsc {
 		}
 	}
 
-	pub fn cat(&mut self, path: &str, fs_mutex: &Mutex<GLOBALFSType>) {
+	pub fn cat(
+		&mut self,
+		path: &str,
+		fs_mutex: &Mutex<GLOBALFSType>,
+	) {
 		if path.is_empty() {
 			println!("Usage: cat <path>");
 			return;
 		}
 		let mut fs = fs_mutex.lock();
 		match fs.open_file(path) {
-			Ok(handle) => {
-				match fs.read_file(handle) {
-					Ok(content) => println!("{}", content),
-					Err(e) => error!("cat: read failed: {:?}", e),
-				}
-			}
+			Ok(handle) => match fs.read_file(handle) {
+				Ok(content) => println!("{}", content),
+				Err(e) => error!("cat: read failed: {:?}", e),
+			},
 			Err(e) => error!("cat: open failed: {:?}", e),
 		}
 	}
-	pub fn write(&mut self, path: &str, lines: &Vec<&str>, fs_mutex:
-	&Mutex<GLOBALFSType>) {
+	pub fn write(
+		&mut self,
+		path: &str,
+		lines: &Vec<&str>,
+		fs_mutex: &Mutex<GLOBALFSType>,
+	) {
 		if path.is_empty() {
 			println!("Usage: write <path> [content]");
 			return;
@@ -92,15 +114,13 @@ impl Fsc {
 		let mut fs = fs_mutex.lock();
 		let handle = match fs.open_file(path) {
 			Ok(h) => h,
-			Err(_) => {
-				match fs.create_file(path) {
-					Ok(h) => h,
-					Err(e) => {
-						error!("write: could not create file: {:?}", e);
-						return;
-					}
-				}
-			}
+			Err(_) => match fs.create_file(path) {
+				Ok(h) => h,
+				Err(e) => {
+					error!("write: could not create file: {:?}", e);
+					return;
+				},
+			},
 		};
 
 		match fs.write_file_lines(handle, &lines) {

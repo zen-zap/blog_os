@@ -122,4 +122,3 @@ use fixed_size_block::FixedSizeBlockAllocator;
 /// Heap memory is separately allocated a contiguous region of the virtual memory
 #[global_allocator]
 static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
-

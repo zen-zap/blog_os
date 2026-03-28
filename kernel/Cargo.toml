@@ -17,6 +17,7 @@ virtio-drivers = "0.11"
 zerocopy = { version = "0.8.26", default-features = false, features = ["derive"] }
 static_assertions = "1.1.0"
 bootloader_api = { version = "0.11.15" }
+acpi = "6.1.1"
 
 [dependencies.lazy_static]
 version = "1.0"

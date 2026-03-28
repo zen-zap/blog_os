@@ -1,8 +1,5 @@
 // helper module to interact with the VGA buffer. Unsafe is abstracted here.
 // src/vga_buffer.rs
-
-#[allow(dead_code)]
-
 /// refer [here](https://os.phil-opp.com/vga-text-mode/#volatile)
 use volatile::Volatile; // helps avoid optimizations by the compiler .. since they could break the code
 

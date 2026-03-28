@@ -1,6 +1,6 @@
 use super::simple_fs::FileSystemError;
-use crate::{error, warn};
 use crate::virtio::OsHal;
+use crate::{error, warn};
 use virtio_drivers::{device::blk::VirtIOBlk, transport::pci::PciTransport};
 
 /// Interface to any storage that presents itself in fixed-size-blocks

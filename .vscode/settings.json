@@ -4,5 +4,23 @@
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.checkOnSave": false,
     "rust-analyzer.cargo.autoreload": true,
-    "rust-analyzer.rustc.source": null
+    "rust-analyzer.rustc.source": null,
+    "cSpell.words": [
+        "acpi",
+        "apic",
+        "apics",
+        "creo",
+        "GLOBALFS",
+        "iobase",
+        "ioregsel",
+        "iowin",
+        "rsdp",
+        "scanc",
+        "scancode",
+        "sivr",
+        "uninit",
+        "vaddr",
+        "Virt",
+        "virtio"
+    ]
 }

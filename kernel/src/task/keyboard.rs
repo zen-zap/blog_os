@@ -1,22 +1,14 @@
 // in src/task/keyboard.rs
 
+use crate::{debug, print, warn};
 use conquer_once::spin::OnceCell;
 use core::{
 	iter::Scan,
 	pin::Pin,
-	task::{Context, Poll}
+	task::{Context, Poll},
 };
 use crossbeam_queue::ArrayQueue;
-use futures_util::{
-	task::AtomicWaker,
-	stream::Stream,
-	stream::StreamExt
-};
-use crate::{
-	warn,
-	debug,
-	print
-};
+use futures_util::{stream::Stream, stream::StreamExt, task::AtomicWaker};
 use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1, layouts};
 
 /// Used to store the tasks from the Interrupt Handler
@@ -31,7 +23,7 @@ static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 pub(crate) fn add_scancode(scancode: u8) {
 	// get a reference to the initialized queue
 	if let Ok(queue) = SCANCODE_QUEUE.try_get() {
-		if let Err(_) = queue.push(scancode) {
+		if queue.push(scancode).is_err() {
 			warn!("SCANCODE_QUEUE full; dropping keyboard input");
 		} else {
 			// you get an input, you wake up the SCANCODE_WAKER
@@ -45,6 +37,7 @@ pub(crate) fn add_scancode(scancode: u8) {
 
 /// To initialize the SCANCODE_QUEUE and read the scancodes in the queue in an
 /// asynchronous way, we make a scancode stream
+#[derive(Default)]
 pub struct ScancodeStream {
 	/// purpose of this field is to prevent construction of this outside of the module
 	_private: (),
@@ -94,7 +87,7 @@ impl Stream for ScancodeStream {
 		// .. hence we have to register the waker before the second check
 		// We get a guarantee that we get a wakeup for any scancodes pushed after the check
 
-		SCANCODE_WAKER.register(&cx.waker());
+		SCANCODE_WAKER.register(cx.waker());
 
 		match queue.pop() {
 			Some(scancode) => {
@@ -132,7 +125,7 @@ pub async fn print_keypresses() {
 /// the next complete key press
 pub async fn read_key(
 	scancodes: &mut ScancodeStream,
-	keyboard: &mut Keyboard<layouts::Us104Key, ScancodeSet1>
+	keyboard: &mut Keyboard<layouts::Us104Key, ScancodeSet1>,
 ) -> DecodedKey {
 	// we'll loop internally until we have enough scancodes from the stream to completely decode
 	// the key

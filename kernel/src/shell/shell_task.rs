@@ -1,10 +1,12 @@
 //! in src/shell/shell_task.rs
 
-use crate::{println, print, task::keyboard, GLOBAL_FS};
+#![allow(clippy::collapsible_match, clippy::collapsible_if)]
+
+use super::fs_com::Fsc;
+use crate::{GLOBAL_FS, print, println, task::keyboard};
 use alloc::string::String;
 use alloc::vec::Vec;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, KeyCode, ScancodeSet1};
-use super::fs_com::Fsc;
+use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
 
 pub async fn run_shell_task() {
 	let mut line_buffer = String::with_capacity(256);
@@ -12,7 +14,7 @@ pub async fn run_shell_task() {
 	let mut keyboard = Keyboard::new(
 		ScancodeSet1::new(),
 		layouts::Us104Key,
-		HandleControl::Ignore // we'll handle special keys ourselves
+		HandleControl::Ignore, // we'll handle special keys ourselves
 	);
 	loop {
 		// prompt
@@ -28,36 +30,36 @@ pub async fn run_shell_task() {
 							println!(); // Move to the next line
 							process_command(&line_buffer).await;
 							break; // Exit inner loop to print new prompt
-                    	}
+						},
 						KeyCode::Backspace => {
 							if !line_buffer.is_empty() {
 								line_buffer.pop();
 								print!("\u{8} \u{8}");
 							}
-						}
+						},
 						_ => {},
 					}
-				}
+				},
 				DecodedKey::Unicode(character) => {
 					// Handle Enter as Unicode character too
-                    if character == '\n' || character == '\r' {
-                        println!(); // Move to the next line
-                        process_command(&line_buffer).await;
-                        break; // Exit inner loop to print new prompt
-                    }
-                    // Handle Backspace as ASCII character (0x08 or 0x7F)
-                    else if character == '\u{8}' || character == '\u{7F}' {
-                        if !line_buffer.is_empty() {
-                            line_buffer.pop();
-                            print!("\u{8} \u{8}");
-                        }
-                    }
+					if character == '\n' || character == '\r' {
+						println!(); // Move to the next line
+						process_command(&line_buffer).await;
+						break; // Exit inner loop to print new prompt
+					}
+					// Handle Backspace as ASCII character (0x08 or 0x7F)
+					else if character == '\u{8}' || character == '\u{7F}' {
+						if !line_buffer.is_empty() {
+							line_buffer.pop();
+							print!("\u{8} \u{8}");
+						}
+					}
 					// Only printable characters
 					if character.is_ascii_graphic() || character == ' ' {
 						line_buffer.push(character);
 						print!("{}", character);
 					}
-				}
+				},
 			}
 		}
 	}
@@ -88,35 +90,35 @@ async fn process_command(line: &str) {
 	if let Ok(fs_mutex) = GLOBAL_FS.try_get() {
 		match command {
 			"ls" => {
-				let path: &str = args.get(0).unwrap_or(&"/");
-				let _ = fsc.ls(path, fs_mutex);
-			}
+				let path: &str = args.first().unwrap_or(&"/");
+				fsc.ls(path, fs_mutex);
+			},
 
 			"touch" => {
-				let path: &str = args.get(0).unwrap_or(&"/");
-				let _ = fsc.touch(path, fs_mutex);
-			}
+				let path: &str = args.first().unwrap_or(&"/");
+				fsc.touch(path, fs_mutex);
+			},
 
 			"mkdir" => {
-				let path: &str = args.get(0).unwrap_or(&"/");
-				let _ = fsc.mkdir(path, fs_mutex);
-			}
+				let path: &str = args.first().unwrap_or(&"/");
+				fsc.mkdir(path, fs_mutex);
+			},
 
 			"rm" => {
-				let path: &str = args.get(0).unwrap_or(&"/");
-				let _ = fsc.rm(path, fs_mutex);
-			}
+				let path: &str = args.first().unwrap_or(&"/");
+				fsc.rm(path, fs_mutex);
+			},
 
 			"cat" => {
-				let path: &str = args.get(0).unwrap_or(&"/");
-				let _ = fsc.cat(path, fs_mutex);
-			}
+				let path: &str = args.first().unwrap_or(&"/");
+				fsc.cat(path, fs_mutex);
+			},
 
 			"write" => {
-				let path: &str = args.get(0).unwrap_or(&"/");
+				let path: &str = args.first().unwrap_or(&"/");
 				let lines: Vec<&str> = args[1..].to_vec();
-				let _ = fsc.write(path, &lines, fs_mutex);
-			}
+				fsc.write(path, &lines, fs_mutex);
+			},
 
 			"help" => {
 				println!("SFS Shell v0.1");
@@ -128,11 +130,11 @@ async fn process_command(line: &str) {
 				println!("  rm <path>      - Delete a file");
 				println!("  write <path> .. - Write content to a file (overwrite)");
 				println!("  help           - Show this message");
-			}
+			},
 
 			_ => {
 				println!("Unknown command: '{}'. Type 'help' for commands.", command);
-			}
+			},
 		}
 	}
 }

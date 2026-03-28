@@ -274,24 +274,24 @@ pub struct Inode {
 pub struct DiskInode {
 	// 64-bit fields first for natural padding into 128 bytes total
 	/// Size of the file content in bytes.
-	pub size_in_bytes: U64<LE>,          // 8   | 8
+	pub size_in_bytes: U64<LE>, // 8   | 8
 	/// Timestamp of last access (Unix timestamp).
-	pub last_access_time: U64<LE>,       // 8   | 16
+	pub last_access_time: U64<LE>, // 8   | 16
 	/// Timestamp of last modification (Unix timestamp).
 	pub last_modification_time: U64<LE>, // 8   | 24
 	/// Timestamp of inode creation (Unix timestamp).
-	pub creation_time: U64<LE>,          // 8   | 32
+	pub creation_time: U64<LE>, // 8   | 32
 	/// Array of 10 direct block pointers (absolute block numbers).
-	pub direct_pointers: [U64<LE>; 10],  // 80  | 112
+	pub direct_pointers: [U64<LE>; 10], // 80  | 112
 	/// Single indirect block pointer (absolute block number).
-	pub indirect_pointer: U64<LE>,       // 8   | 120
+	pub indirect_pointer: U64<LE>, // 8   | 120
 	// small fields at the end, no padding if they sum upto 128
 	/// File type (File=1, Directory=2, Unknown=0).
-	pub mode: U16<LE>,       // 2   | 122
+	pub mode: U16<LE>, // 2   | 122
 	/// User ID of the owner.
-	pub user_id: U16<LE>,    // 2   | 124
+	pub user_id: U16<LE>, // 2   | 124
 	/// Group ID of the owner.
-	pub group_id: U16<LE>,   // 2   | 126
+	pub group_id: U16<LE>, // 2   | 126
 	/// Number of hard links to this inode.
 	pub link_count: U16<LE>, // 2   | 128
 }

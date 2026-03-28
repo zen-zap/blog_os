@@ -2,15 +2,31 @@
 #![no_std]
 #![no_main]
 
-use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use acpi::{
+	AcpiTable,
+	platform::{AcpiPlatform, InterruptModel, interrupt::IoApic},
+	sdt::madt::{self, MadtEntry},
+};
+use alloc::{
+	boxed::Box,
+	rc::Rc,
+	vec::{self, Vec},
+};
 use bootloader_api::{
 	BootInfo,
 	config::{BootloaderConfig, Mapping},
 	entry_point,
 };
 use conquer_once::spin::OnceCell;
-use core::{arch::asm, panic::PanicInfo};
-use creo::fs::simple_fs::{FileSystem, FileSystemError, GLOBALFSType, SFS};
+use core::{arch::asm, error, panic::PanicInfo};
+use creo::{
+	acpi::AcpiHandler,
+	apic,
+	fs::{
+		self,
+		simple_fs::{FileSystem, FileSystemError, GLOBALFSType, SFS},
+	},
+};
 use creo::{
 	allocator, debug, debug_if, error, fs_debug, info,
 	interrupts::InterruptIndex::Keyboard,
@@ -44,8 +60,6 @@ extern crate alloc;
 
 use creo::GLOBAL_FS;
 
-const RUN_FILESYSTEM_SELF_CHECK: bool = false;
-
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 	let mut config = BootloaderConfig::new_default();
 	config.mappings.physical_memory = Some(Mapping::Dynamic);
@@ -54,170 +68,51 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-fn run_filesystem_self_check(fs: &mut GLOBALFSType) {
-	info!("--- Starting SFS C-W-R-D Test ---");
-	let filename = "test.txt";
-
-	fs_debug!("Attempting cleanup of '{}'...", filename);
-	match fs.delete_file(filename) {
-		Ok(_) => {
-			fs_debug!("Cleanup successful.");
-		},
-		Err(_) => {
-			fs_debug!("File not present, no cleanup needed.");
-		},
-	}
-
-	fs_debug!("Creating '{}'...", filename);
-	let handle = match fs.create_file(filename) {
-		Ok(h) => {
-			info!("File created successfully with handle {:?}", h);
-			h
-		},
-		Err(e) => {
-			error!("Failed to create file: {:?}", e);
-			creo::hlt_loop();
-		},
-	};
-
-	let lines_to_write = &["Hello from your SFS!", "This is the second line."];
-	fs_debug!("Writing content to file...");
-	match fs.write_file_lines(handle, lines_to_write) {
-		Ok(_) => info!("Content written successfully."),
-		Err(e) => {
-			error!("Failed to write to file: {:?}", e);
-			creo::hlt_loop();
-		},
-	}
-
-	fs_debug!("Reading content back from file...");
-	match fs.read_file(handle) {
-		Ok(content) => {
-			info!("Read success! Content:\n---\n{}\n---", content);
-
-			let expected_content = lines_to_write.join("\n");
-			if content == expected_content {
-				info!("Verification SUCCESS: Content matches!");
-			} else {
-				error!("Verification FAILED: Content mismatch!");
-			}
-		},
-		Err(e) => {
-			error!("Failed to read from file: {:?}", e);
-			creo::hlt_loop();
-		},
-	}
-
-	fs_debug!("Listing root directory...");
-	match fs.list_file(".") {
-		Ok(files) => info!("Files in root: {:?}", files),
-		Err(e) => error!("Failed to list files: {:?}", e),
-	}
-
-	fs_debug!("Deleting '{}'...", filename);
-	match fs.delete_file(filename) {
-		Ok(_) => info!("File deleted successfully."),
-		Err(e) => error!("Failed to delete file: {:?}", e),
-	}
-
-	fs_debug!("Listing root directory after delete...");
-	match fs.list_file(".") {
-		Ok(files) => info!("Files in root: {:?}", files),
-		Err(e) => error!("Failed to list files: {:?}", e),
-	}
-
-	info!("--- SFS Test Complete ---");
-}
-
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 	let phy_offset_val = boot_info
 		.physical_memory_offset
 		.into_option()
 		.expect("Physical memory mapping failed in bootloader");
-
 	info!("  - Physical Memory Offset: {:#x}", phy_offset_val);
-	debug!("  - Memory Map:");
-	for region in boot_info.memory_regions.iter() {
-		debug!(
-			"    - Start: {:#010x}, End: {:#010x}, Size: {} KB, Type: {:?}",
-			region.start,
-			region.end,
-			region.end.saturating_sub(region.start) / 1024,
-			region.kind
-		);
-	}
-	info!("=================");
 
-	creo::init(); // for the exception things
+	let rsdp_addr = boot_info.rsdp_addr.into_option().expect("Bootloader failed to find ACPI RSDP");
+	info!("  - ACPI RSDP Address: {:#x}", rsdp_addr);
+
+	creo::init();
 
 	let phys_mem_offset = VirtAddr::new(phy_offset_val);
-
-	// Set the physical memory offset for VirtIO
 	unsafe { creo::virtio::PHYSICAL_MEMORY_OFFSET = phy_offset_val }
 
 	let mut mapper = unsafe { memory::init(phys_mem_offset) };
-	// get the physical frames that you wanna map
-
 	unsafe {
 		FRAME_ALLOCATOR.lock().init(&boot_info.memory_regions);
 	}
-
 	*PAGE_MAPPER.lock() = Some(mapper);
 
 	{
 		let mut mapper_lock = PAGE_MAPPER.lock();
 		let mut allocator_lock = FRAME_ALLOCATOR.lock();
-		// here we do the mapping of the physical frames
 		allocator::init_heap(mapper_lock.as_mut().unwrap(), &mut *allocator_lock)
 			.expect("heap initialization failed!");
 	}
 
-	let pci_config_access = PciConfigIo;
-	let mut pci_root = PciRoot::new(pci_config_access);
+	apic::init(rsdp_addr, phy_offset_val);
 
-	if let Some(device_function) = pci::scan(&mut pci_root) {
-		let mut pci_root_mut = pci_root;
-		let transport = PciTransport::new::<OsHal, _>(&mut pci_root_mut, device_function)
-			.expect("Failed to create PCI transport");
+	x86_64::instructions::interrupts::enable();
 
-		let mut blk_dev =
-			VirtIOBlk::<OsHal, _>::new(transport).expect("failed to create blk driver");
-
-		let mut fs = match SFS::mount(blk_dev) {
-			Ok(fs) => fs,
-			Err(_) => {
-				warn!("Mount failed or filesystem not found! Formatting disk...");
-
-				// We need to re-create the block device
-				let mut pci_root_for_format = PciRoot::new(pci_config_access);
-				let transport =
-					PciTransport::new::<OsHal, _>(&mut pci_root_for_format, device_function)
-						.expect("Failed to re-create transport for format");
-
-				let blk_dev_for_format = VirtIOBlk::<OsHal, _>::new(transport)
-					.expect("Failed to re-create blk_dev for format");
-
-				let mut fs = SFS::format(blk_dev_for_format).expect("Failed to format disk.");
-
-				fs.init_root_directory().expect("Failed to init root directory");
-
-				fs
-			},
-		};
-
-		if RUN_FILESYSTEM_SELF_CHECK {
-			run_filesystem_self_check(&mut fs);
-		}
-
-		GLOBAL_FS
-			.try_init_once(|| Mutex::new(fs))
-			.expect("Failed to initialize GLOBAL_FS");
-	} else {
-		error!("No VirtIO block device found!");
-	}
+	fs::filesystem::init_filesystem();
 
 	let mut executor = Executor::new();
+	debug!("Kernel initialization complete.");
 
+	enter_ring_3();
+
+	executor.run();
+
+	creo::hlt_loop();
+}
+
+fn enter_ring_3() -> ! {
 	creo::info!("Allocating User Space Memory");
 
 	let user_code_addr = VirtAddr::new(0x_0000_2000_0000);
@@ -273,11 +168,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 			user_stack_ptr,
 		);
 	}
-
-	debug!("Kernel initialization complete - starting task executor");
-	executor.run();
-
-	creo::hlt_loop();
 }
 
 #[panic_handler]
