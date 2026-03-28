@@ -1,9 +1,6 @@
 #![allow(dead_code, unused, unreachable_code)]
 #![no_std]
 #![no_main]
-#![reexport_test_harness_main = "test_main"]
-#![feature(custom_test_frameworks)]
-#![test_runner(creo::test_runner)]
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use bootloader_api::{
@@ -17,7 +14,7 @@ use creo::fs::simple_fs::{FileSystem, FileSystemError, GLOBALFSType, SFS};
 use creo::{
 	allocator, debug, debug_if, error, fs_debug, info,
 	interrupts::InterruptIndex::Keyboard,
-	memory::{self, BootInfoFrameAllocator, translate_addr},
+	memory::{self, BitmapFrameAllocator, translate_addr},
 	memory_debug, pci_debug, print, println,
 	shell::shell_task,
 	task::{
@@ -160,16 +157,18 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
 	let mut mapper = unsafe { memory::init(phys_mem_offset) };
 	// get the physical frames that you wanna map
-	let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
 
-	*FRAME_ALLOCATOR.lock() = Some(frame_allocator);
+	unsafe {
+		FRAME_ALLOCATOR.lock().init(&boot_info.memory_regions);
+	}
+
 	*PAGE_MAPPER.lock() = Some(mapper);
 
 	{
 		let mut mapper_lock = PAGE_MAPPER.lock();
 		let mut allocator_lock = FRAME_ALLOCATOR.lock();
 		// here we do the mapping of the physical frames
-		allocator::init_heap(mapper_lock.as_mut().unwrap(), allocator_lock.as_mut().unwrap())
+		allocator::init_heap(mapper_lock.as_mut().unwrap(), &mut *allocator_lock)
 			.expect("heap initialization failed!");
 	}
 
@@ -231,14 +230,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 	unsafe {
 		creo::memory::map_user_page(
 			mapper_lock.as_mut().unwrap(),
-			allocator_lock.as_mut().unwrap(),
+			&mut *allocator_lock,
 			user_code_addr,
 		)
 		.expect("Failed to map user code page");
 
 		creo::memory::map_user_page(
 			mapper_lock.as_mut().unwrap(),
-			allocator_lock.as_mut().unwrap(),
+			&mut *allocator_lock,
 			user_stack_addr,
 		)
 		.expect("Failed to map user stack page");
@@ -281,66 +280,65 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 	creo::hlt_loop();
 }
 
-#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	error!("KERNEL PANIC: {}\n", info);
+	error!("==================================================");
+	error!("                 KERNEL PANIC                     ");
+	error!("==================================================");
+
+	// extract the file and line number if available
+	if let Some(location) = info.location() {
+		error!("Location : {}:{}", location.file(), location.line());
+	} else {
+		error!("Location : Unknown");
+	}
+
+	error!("Message  : {}", info.message());
+	error!("--------------------------------------------------");
 
 	let rip: u64;
+	let rbp: u64;
+	let rsp: u64;
+
+	// instruction, base, and stack pointers for the current frame
 	unsafe {
 		asm!(
-			"lea {rip}, [rip]",
-			rip = out(reg) rip,
+			"lea {}, [rip]",
+			"mov {}, rbp",
+			"mov {}, rsp",
+			out(reg) rip,
+			out(reg) rbp,
+			out(reg) rsp,
 			options(nomem, nostack, preserves_flags),
 		);
 	}
 
-	error!("RIP: {:#018x}", rip);
+	error!("CPU State (Inside Panic Handler):");
+	error!("  RIP: {:#018x}", rip);
+	error!("  RBP: {:#018x}", rbp);
+	error!("  RSP: {:#018x}", rsp);
+	error!("--------------------------------------------------");
+	error!("Stack Backtrace (Use llvm-addr2line to decode):");
 
-	error!("\nStack Backtrace:");
-	let mut rbp: u64;
-	unsafe {
-		asm!(
-			"mov {rbp}, rbp",
-			rbp = out(reg) rbp,
-			options(nomem, preserves_flags),
-		)
+	let mut current_rbp = rbp;
+	let mut depth = 0;
+
+	// walking the base pointer chain
+	while current_rbp != 0 && depth < 20 {
+		let ret_addr = unsafe { *((current_rbp + 8) as *const u64) };
+
+		if ret_addr == 0 {
+			break;
+		}
+
+		error!("  [{:>2}] {:#018x}", depth, ret_addr);
+
+		// dereference the current RBP to get the caller's RBP
+		current_rbp = unsafe { *(current_rbp as *const u64) };
+		depth += 1;
 	}
 
-	let mut stack_trace_count = 0;
-
-	while rbp != 0 && stack_trace_count < 20 {
-		let ret = unsafe { *((rbp + 8) as *const u64) };
-		error!("  {:#018x}", ret);
-		rbp = unsafe { *(rbp as *const u64) };
-
-		stack_trace_count += 1;
-	}
+	error!("==================================================");
 
 	creo::hlt_loop();
-}
-
-#[cfg(test)]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-	creo::test_panic_handler(info)
-}
-
-#[test_case]
-fn one_one_assertion() {
-	assert_eq!(1, 1);
-}
-
-#[test_case]
-fn test_interrupt_handler() {
-	x86_64::instructions::interrupts::int3();
-}
-
-async fn async_number_69() -> u32 {
-	69
-}
-
-async fn example_task() {
-	let number = async_number_69().await;
-	debug!("async number: {}", number);
 }

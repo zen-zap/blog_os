@@ -16,8 +16,6 @@ linked_list_allocator = "0.9.0"
 virtio-drivers = "0.11"
 zerocopy = { version = "0.8.26", default-features = false, features = ["derive"] }
 static_assertions = "1.1.0"
-
-[target.'cfg(target_os = "none")'.dependencies]
 bootloader_api = { version = "0.11.15" }
 
 [dependencies.lazy_static]
@@ -42,12 +40,15 @@ features = ["alloc"]
 
 [features]
 default = []
-# Debug feature flags for conditional compilation
 debug-fs = []
 debug-virtio = []
 debug-memory = []
 debug-hardware = []
 trace-all = ["debug-fs", "debug-virtio", "debug-memory", "debug-hardware"]
+
+[lib]
+test = false
+doctest = false
 
 [[bin]]
 name = "creo"

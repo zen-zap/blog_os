@@ -61,13 +61,7 @@ extern "x86-interrupt" fn double_fault_handler(
 	loop {}
 }
 
-#[test_case] // doing cargo test naturally runs all these tests .. 
-fn test_breakpoint_exception() {
-	x86_64::instructions::interrupts::int3();
-}
-
-// there is an abstraction for the PIC in this crate
-use pic8259::ChainedPics; // a pair of chained PICs .. check source in doc
+use pic8259::ChainedPics;
 use spin;
 
 // PIC - Peripheral Interface Controller

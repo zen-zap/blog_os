@@ -1,14 +1,13 @@
-// in src/memory.rs
+// in kernel/src/memory.rs
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use virtio_drivers::device::console::Size;
 use x86_64::{
 	PhysAddr, VirtAddr,
 	registers::control::Cr3,
-	structures::paging::page_table::FrameError,
 	structures::paging::{
 		FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags as Flags,
-		PhysFrame, Size4KiB, mapper::MapToError,
+		PhysFrame, Size4KiB, frame, mapper::MapToError, page_table::FrameError,
 	},
 };
 
@@ -16,12 +15,14 @@ use crate::GLOBAL_FS;
 
 /// Returns a mutable reference to the active level 4 table.
 ///
+/// # Safety
 /// This function is unsafe because the caller must guarantee that the
 /// complete physical memory is mapped to virtual memory at the passed
 /// `physical_memory_offset`. Also, this function must be only called once
 /// to avoid aliasing `&mut` references (which is undefined behavior).
 unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
-	let (level_4_table_frame, _) = Cr3::read(); // Cr3 holds the physical address of the highest-level page table
+	let (level_4_table_frame, _) = Cr3::read();
+	// Cr3 holds the physical address of the highest-level page table
 	let phys = level_4_table_frame.start_address();
 	let virt = physical_memory_offset + phys.as_u64();
 	let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
@@ -32,6 +33,7 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
 /// Translates the given virtual address to the mapped physical address, or
 /// `None` if the address is not mapped.
 ///
+/// # Safety
 /// This function is unsafe because the caller must guarantee that the
 /// complete physical memory is mapped to virtual memory at the passed
 /// `physical_memory_offset`.
@@ -82,6 +84,7 @@ fn translate_addr_inner(
 
 /// Initialize a new OffsetPageTable.
 ///
+/// # Safety
 /// This function is unsafe because the caller must guarantee that the
 /// complete physical memory is mapped to virtual memory at the passed
 /// `physical_memory_offset`. Also, this function must be only called once
@@ -94,77 +97,11 @@ pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static>
 	}
 }
 
-/// Creates an example mapping for the given page to frame `0xb8000`.
-pub fn create_example_mapping(
-	page: Page,
-	mapper: &mut OffsetPageTable,
-	frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) {
-	let frame = PhysFrame::containing_address(PhysAddr::new(0xb8000));
-	let flags = Flags::PRESENT | Flags::WRITABLE;
-
-	let map_to_result = unsafe {
-		// FIXME: this is not safe, we only do it for testing
-		mapper.map_to(page, frame, flags, frame_allocator)
-	};
-
-	map_to_result.expect("map_to failed").flush();
-}
-
-/// A FrameAllocator that always returns `None`
-pub struct EmptyFrameAllocator;
-
-unsafe impl FrameAllocator<Size4KiB> for EmptyFrameAllocator {
-	/// inside an unsafe impl because the implementor must guarantee that the allocator always
-	/// yields only unused frames
-	fn allocate_frame(&mut self) -> Option<PhysFrame> {
-		None
-	}
-}
-
-/// A FrameAllocator that returns usable frames from the bootloader's memory map.
-pub struct BootInfoFrameAllocator {
-	memory_map: &'static MemoryRegions,
-	next: usize,
-}
-
-impl BootInfoFrameAllocator {
-	/// Create a FrameAllocator from the passed memory map.
-	///
-	/// This function is unsafe because the caller must guarantee that the passed
-	/// memory map is valid. The main requirement is that all frames that are marked
-	/// as `USABLE` in it are really unused.
-	pub unsafe fn init(memory_map: &'static MemoryRegions) -> Self {
-		BootInfoFrameAllocator { memory_map, next: 0 }
-	}
-
-	/// Returns an iterator over the usable frames specified in the memory map.
-	fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> {
-		// get usable regions from memory map
-		let regions = self.memory_map.iter();
-
-		let usable_regions = regions.filter(|r| r.kind == MemoryRegionKind::Usable);
-		// map each region to its address range
-		let addr_ranges = usable_regions.map(|r| r.start..r.end);
-
-		// transform to an iterator of frame start addresses
-		let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096));
-
-		// create `PhysFrame` types from the start addresses
-		frame_addresses.map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
-	}
-}
-
-unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
-	fn allocate_frame(&mut self) -> Option<PhysFrame> {
-		let frame = self.usable_frames().nth(self.next);
-		self.next += 1;
-		frame
-	}
-}
-
 /// Allocates a physical frame and maps it to the given virtual address
 /// with Ring 3 permissions for User Mode.
+///
+/// # Safety
+/// This function is unsafe because the caller must guarantee that the VirtAddr is a valid.
 pub unsafe fn map_user_page(
 	mapper: &mut impl Mapper<Size4KiB>,
 	frame_allocator: &mut impl FrameAllocator<Size4KiB>,
@@ -181,4 +118,93 @@ pub unsafe fn map_user_page(
 	}
 
 	Ok(())
+}
+
+/// Uses a bitmap to track usage of physical RAM
+///
+/// Can keep track of upto 4GB of physical RAM
+pub struct BitmapFrameAllocator {
+	/// Each bit represents a reserved physical frame of 4KiB
+	bitmap: [u64; 16384],
+}
+
+// is there a contract for these functions?
+// why is this not defined under a trait?
+impl BitmapFrameAllocator {
+	/// Creates a new BitmapFrameAllocator
+	///
+	/// Defaults to all 1s -- hardware-reserved initially
+	/// until the bootloader tells us which regions are safe to use
+	pub const fn new() -> Self {
+		Self { bitmap: [u64::MAX; 16384] }
+	}
+
+	/// Initializes the bitmap using the bootloaders memory map
+	///
+	/// # Safety
+	/// Function is unsafe because the caller must guarantee that the passed memory map is valid.
+	pub unsafe fn init(
+		&mut self,
+		memory_map: &'static MemoryRegions,
+	) {
+		for mem_region in memory_map.iter() {
+			if mem_region.kind == MemoryRegionKind::Usable {
+				// scaling the addresses
+				let st_frame = mem_region.start / 4096;
+				let en_frame = mem_region.end / 4096;
+
+				for frame in st_frame..en_frame {
+					self.mark_free(frame as usize)
+				}
+			}
+		}
+	}
+
+	/// Helper function to clear a specific bit (free)
+	fn mark_free(
+		&mut self,
+		frame_index: usize,
+	) {
+		let array_idx = frame_index / 64;
+		let bit_idx = frame_index % 64;
+
+		if array_idx < self.bitmap.len() {
+			self.bitmap[array_idx] &= !(1 << bit_idx);
+		}
+	}
+
+	/// Returns a physical frame to the allocator so that it can be used later
+	pub fn deallocate_frame(
+		&mut self,
+		frame: PhysFrame,
+	) {
+		let frame_index = (frame.start_address().as_u64() / 4096) as usize;
+		self.mark_free(frame_index);
+	}
+}
+
+impl Default for BitmapFrameAllocator {
+	fn default() -> Self {
+		BitmapFrameAllocator::new()
+	}
+}
+
+unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
+	fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
+		for (array_idx, block) in self.bitmap.iter_mut().enumerate() {
+			if *block != u64::MAX {
+				let bit_idx = (!*block).trailing_zeros();
+
+				*block |= 1 << bit_idx; // mark as used
+
+				// each u64 block holds 64 bits (64 frames)
+				let frame_idx = (array_idx * 64) + (bit_idx as usize);
+				let paddr = PhysAddr::new((frame_idx as u64) * 4096);
+
+				return Some(PhysFrame::containing_address(paddr));
+			}
+		}
+
+		None
+	}
 }

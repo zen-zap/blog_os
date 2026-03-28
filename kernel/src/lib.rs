@@ -2,14 +2,10 @@
 #![allow(unused, dead_code)]
 #![no_std]
 #![cfg_attr(test, no_main)]
-#![feature(custom_test_frameworks)]
-#![test_runner(crate::test_runner)]
-#![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
 #![feature(associated_type_defaults)]
 #![feature(trivial_bounds)]
 pub mod allocator;
-// pub mod fs;
 pub mod fs;
 pub mod gdt;
 pub mod interrupts;
@@ -17,7 +13,6 @@ pub mod memory;
 pub mod scanc;
 pub mod serial;
 pub mod task;
-// Add tracing module
 pub mod shell;
 pub mod utils;
 pub mod vga_buffer;
@@ -30,57 +25,6 @@ use core::panic::PanicInfo;
 
 pub use crate::fs::simple_fs::GLOBALFSType;
 pub static GLOBAL_FS: OnceCell<Mutex<GLOBALFSType>> = OnceCell::uninit();
-
-/// trait for `test` functions
-pub trait Testable {
-	/// to run the function implementing this trait
-	fn run(&self) -> (); // Fn() trait
-}
-
-impl<T> Testable for T
-where
-	T: Fn(),
-{
-	/// helps print the name and an [ok] message if the test runs succcessfully
-	fn run(&self) -> () {
-		serial_print!("{}....\t", core::any::type_name::<T>()); // any::type_name is directly
-		// implemented by the compiler
-		// for functions their type is their name                  // and returns a string
-		// description of every type
-		self();
-		serial_println!("[ok]");
-	}
-}
-
-// #[cfg(test)] not added so that it is available to all executables and itegration tests -- it is
-// also public
-/// takes the tests(functions) as arguments
-/// iterates over each function
-/// - `Fn()` is a trait [functions that don't take arguments and don't return anything] and dyn Fn() is a trait object
-///
-/// - we just iterate over this list of functins ... used for testing
-/// - takes a reference to slice of references to trait objects
-pub fn test_runner(tests: &[&dyn Testable]) {
-	serial_println!("Running {} tests", tests.len());
-	for test in tests {
-		test.run(); // call each test function in the list
-	}
-
-	// to exit_qemu -- cargo considers all error codes other than 0 as Failures
-	exit_qemu(QemuExitCode::Success);
-}
-
-/// our panic handler in test mode -- no need to gate it here .... the actual function is gated in
-/// main.rs using #[cfg(test)]
-pub fn test_panic_handler(info: &PanicInfo) -> ! {
-	serial_println!("[failed] \n");
-	serial_println!("Error: {} \n", info);
-	exit_qemu(QemuExitCode::Failed);
-
-	serial_println!("QemuExitCode::Failed didn't work");
-
-	hlt_loop();
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -108,38 +52,6 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 use bootloader_api::{BootInfo, entry_point};
 use conquer_once::spin::OnceCell;
 use spin::Mutex;
-
-#[cfg(test)]
-entry_point!(test_kernel_main);
-
-/// actual entry point?
-#[cfg(test)]
-fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
-	init(); // for breakpoints
-	test_main();
-	hlt_loop();
-}
-
-///// Entry point for `cargo test`
-//#[cfg(test)]
-//#[no_mangle] // read about this a bit
-//pub extern "C" fn _start() -> ! {
-//
-//    init(); // for the breakpoint checking -- completely separate from main.rs ... gotta make a new
-//            // IDT for testing too uk ..
-//
-//    #[cfg(test)]
-//    test_main(); // call the re-exported test harness when testing
-//
-//    hlt_loop();
-//}
-
-/// panic handler for the library in test mode
-#[cfg(test)]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-	test_panic_handler(info)
-}
 
 /// to initialize the IDT for exception handling
 pub fn init() {

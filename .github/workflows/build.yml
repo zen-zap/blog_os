@@ -44,6 +44,9 @@ jobs:
       - name: Build Orchestrator
         run: cargo build --package builder
 
+      - name: Create disk.img
+        run: dd if=/dev/zero of=disk.img bs=1M count=64
+
       - name: Boot Test (60 Second Timeout)
         run: |
           timeout 60s cargo run --bin builder || if [ $? -eq 124 ]; then exit 0; else exit 1; fi

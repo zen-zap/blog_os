@@ -2,7 +2,7 @@
 
 pub mod pci;
 
-use crate::memory::BootInfoFrameAllocator;
+use crate::memory::BitmapFrameAllocator;
 use crate::{debug, error, virtio_debug, warn};
 use alloc::vec::Vec;
 use core::ptr::NonNull;
@@ -15,13 +15,12 @@ use x86_64::{
 	structures::paging::{FrameAllocator, OffsetPageTable},
 };
 
-// Global reference to the frame allocator
-// gotta set it in kernel init function
 lazy_static! {
-	pub static ref FRAME_ALLOCATOR: Mutex<Option<BootInfoFrameAllocator>> = Mutex::new(None);
 	pub static ref PAGE_MAPPER: Mutex<Option<OffsetPageTable<'static>>> = Mutex::new(None);
 	static ref DMA_FREE_LIST: Mutex<Vec<PhysFrame>> = Mutex::new(Vec::new());
 }
+
+pub static FRAME_ALLOCATOR: Mutex<BitmapFrameAllocator> = Mutex::new(BitmapFrameAllocator::new());
 
 pub struct OsHal;
 
@@ -52,17 +51,14 @@ unsafe impl Hal for OsHal {
 			return (paddr.as_u64() as usize, NonNull::new(vaddr.as_mut_ptr()).unwrap());
 		}
 
-		let mut frame_allocator_lock = FRAME_ALLOCATOR.lock();
-		let allocator = frame_allocator_lock.as_mut().expect("Frame allocator not initialized");
+		let mut frame_allocator = FRAME_ALLOCATOR.lock();
 
-		// 1. Allocate a physical frame.
-		let frame = allocator
+		let frame = frame_allocator
 			.allocate_frame()
 			.expect("Failed to allocate frame for DMA -- Out of physical frames");
 
 		let paddr = frame.start_address();
 
-		// 2. Calculate its virtual address in the higher-half mapping.
 		let vaddr = VirtAddr::new(paddr.as_u64() + unsafe { PHYSICAL_MEMORY_OFFSET });
 
 		virtio_debug!("Allocating DMA buffer ({} pages):", pages);
