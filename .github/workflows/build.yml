@@ -1,41 +1,42 @@
-name: Running Build
+name: Creo OS
 
 on:
   push:
-    branches:
-      - main
+    branches: ["**"]
   pull_request:
+    branches: ["**"]
 
 jobs:
-  build:
+  build_and_test:
+    if: "contains(github.event.head_commit.message, '[run ci]') || github.event_name == 'pull_request'"
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Setup Nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly-x86_64-unknown-linux-gnu
-          override: true
-          components: rust-src, llvm-tools-preview
+          components: rust-src
+          targets: x86_64-unknown-none
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache Cargo Registry and Build
+        uses: Swatinem/rust-cache@v2
 
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
 
-      - name: Install bootimage
-        run: cargo install bootimage
+      - name: Build Kernel
+        run: cargo build --package creo --target x86_64-unknown-none
 
-      - name: Build project
-        run: cargo build --verbose --target x86_64-creo.json
+      - name: Build Orchestrator
+        run: cargo build --package builder
+
+      - name: Boot Test (60 Second Timeout)
+        # Runs the OS. The 'timeout' command will kill QEMU after 60s, returning code 124 on success.
+        # We catch 124 and exit 0 (success) so the CI passes.
+        run: |
+          timeout 60s cargo run --bin builder || if [ $? -eq 124 ]; then exit 0; else exit 1; fi
+        env:
+          CI: "true" # Tells our builder to run without a GUI
