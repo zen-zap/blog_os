@@ -36,8 +36,6 @@ version = "0.3.11"
 default-features = false
 features = ["alloc"]
 
-# TODO: setup test framework later on
-
 [features]
 default = []
 debug-fs = []

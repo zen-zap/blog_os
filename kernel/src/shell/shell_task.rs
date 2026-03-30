@@ -78,7 +78,7 @@ async fn process_command(line: &str) {
 			println!("zen-zap");
 		},
 		"clear" => {
-			for _ in 0..25 {
+			for _ in 0..100 {
 				println!();
 			}
 		},

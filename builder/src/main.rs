@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+const BOOT_UEFI: bool = true;
+
 fn main() {
 	println!("Building creo OS kernel...");
 
@@ -25,13 +27,22 @@ fn main() {
 
 	println!("Creating BIOS disk image...");
 	let bios_path = PathBuf::from("target/bios.img");
-
 	bootloader::BiosBoot::new(&kernel_path).create_disk_image(&bios_path).unwrap();
+
+	println!("Creating UEFI disk image...");
+	let uefi_path = PathBuf::from("target/uefi.img");
+	bootloader::UefiBoot::new(&kernel_path).create_disk_image(&uefi_path).unwrap();
 
 	println!("Booting creo OS...");
 	let mut cmd = Command::new("qemu-system-x86_64");
 
-	cmd.arg("-drive").arg(format!("format=raw,file={}", bios_path.display()));
+	if BOOT_UEFI {
+		// uefi boot requires the ovmf firmware
+		cmd.arg("-bios").arg("OVMF.fd");
+		cmd.arg("-drive").arg(format!("format=raw,file={}", uefi_path.display()));
+	} else {
+		cmd.arg("-drive").arg(format!("format=raw,file={}", bios_path.display()));
+	}
 	cmd.arg("-drive").arg("file=disk.img,format=raw,if=none,id=disk0");
 	cmd.arg("-device").arg("virtio-blk-pci,drive=disk0");
 	cmd.arg("-device").arg("isa-debug-exit,iobase=0xf4,iosize=0x04");

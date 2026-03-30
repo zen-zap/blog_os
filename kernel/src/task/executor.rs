@@ -8,7 +8,6 @@ use futures_util::task::waker;
 
 pub struct Executor {
 	tasks: BTreeMap<TaskId, Task>,
-	/// reference counted ArrayQueue, shared between Executors and Wakers
 	task_queue: Arc<ArrayQueue<TaskId>>,
 	waker_cache: BTreeMap<TaskId, Waker>,
 }
@@ -38,6 +37,7 @@ impl Executor {
 	pub fn run(&mut self) -> ! {
 		loop {
 			self.run_ready_tasks();
+			self.sleep_if_idle();
 		}
 	}
 
@@ -55,7 +55,7 @@ impl Executor {
 			};
 			let waker = waker_cache
 				.entry(task_id)
-				.or_insert_with(|| TaskWaker::new(task_id, task_queue.clone()));
+				.or_insert_with(|| TaskWaker::new_waker(task_id, task_queue.clone()));
 			let mut context = Context::from_waker(waker);
 			match task.poll(&mut context) {
 				Poll::Ready(()) => {
@@ -84,13 +84,19 @@ impl Executor {
 	}
 }
 
+impl Default for Executor {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 struct TaskWaker {
 	task_id: TaskId,
 	task_queue: Arc<ArrayQueue<TaskId>>,
 }
 
 impl TaskWaker {
-	fn new(
+	fn new_waker(
 		task_id: TaskId,
 		task_queue: Arc<ArrayQueue<TaskId>>,
 	) -> Waker {
@@ -105,8 +111,6 @@ impl TaskWaker {
 use alloc::task::Wake;
 use x86_64::instructions::hlt;
 
-// gotta convert our TaskWaker to a Waker instance first
-// could also be done by using RawWaker
 impl Wake for TaskWaker {
 	fn wake(self: Arc<Self>) {
 		self.wake_task();
