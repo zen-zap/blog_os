@@ -37,10 +37,12 @@ fn main() {
 	let mut cmd = Command::new("qemu-system-x86_64");
 
 	if BOOT_UEFI {
+		println!("Booting in UEFI mode");
 		// uefi boot requires the ovmf firmware
 		cmd.arg("-bios").arg("OVMF.fd");
 		cmd.arg("-drive").arg(format!("format=raw,file={}", uefi_path.display()));
 	} else {
+		println!("Booting in BIOS mode");
 		cmd.arg("-drive").arg(format!("format=raw,file={}", bios_path.display()));
 	}
 	cmd.arg("-drive").arg("file=disk.img,format=raw,if=none,id=disk0");
