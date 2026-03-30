@@ -17,6 +17,7 @@ zerocopy = { version = "0.8.26", default-features = false, features = ["derive"]
 static_assertions = "1.1.0"
 bootloader_api = { version = "0.11.15" }
 acpi = "6.1.1"
+no-std-async = "1.1.2"
 
 [dependencies.lazy_static]
 version = "1.0"

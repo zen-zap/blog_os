@@ -111,18 +111,18 @@ async fn process_command(line: &str) {
 				let path = args.first().unwrap_or(&"/");
 
 				match command {
-					"ls" => fsc.ls(path, fs_mutex),
-					"touch" => fsc.touch(path, fs_mutex),
-					"mkdir" => fsc.mkdir(path, fs_mutex),
-					"rm" => fsc.rm(path, fs_mutex),
-					"cat" => fsc.cat(path, fs_mutex),
+					"ls" => fsc.ls(path, fs_mutex).await,
+					"touch" => fsc.touch(path, fs_mutex).await,
+					"mkdir" => fsc.mkdir(path, fs_mutex).await,
+					"rm" => fsc.rm(path, fs_mutex).await,
+					"cat" => fsc.cat(path, fs_mutex).await,
 					"write" => {
 						let lines = if args.len() > 1 {
 							&args[1..]
 						} else {
 							&[]
 						};
-						fsc.write(path, lines, fs_mutex);
+						fsc.write(path, lines, fs_mutex).await;
 					},
 					_ => unreachable!(),
 				}

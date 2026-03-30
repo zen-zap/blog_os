@@ -3,6 +3,7 @@ use crate::virtio::OsHal;
 use crate::virtio::pci;
 use crate::virtio::pci::PciConfigIo;
 use crate::{GLOBAL_FS, error, fs_debug, hlt_loop, info, warn};
+use no_std_async::Mutex as AsyncMutex;
 use spin::Mutex;
 use virtio_drivers::{
 	device::blk::VirtIOBlk,
@@ -50,7 +51,7 @@ pub fn init_filesystem() {
 		}
 
 		GLOBAL_FS
-			.try_init_once(|| Mutex::new(fs))
+			.try_init_once(|| AsyncMutex::new(fs))
 			.expect("Failed to initialize GLOBAL_FS");
 	} else {
 		error!("No VirtIO block device found!");

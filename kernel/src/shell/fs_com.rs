@@ -9,6 +9,7 @@
 use crate::fs::simple_fs::FileSystem;
 use crate::{GLOBALFSType, error, info, println};
 use alloc::vec::Vec;
+use no_std_async::Mutex as AsyncMutex;
 use spin::Mutex;
 
 /// A stateless utility struct for executing file system commands.
@@ -26,19 +27,19 @@ impl Fsc {
 	/// # Arguments
 	/// * `path` - The directory path to list.
 	/// * `fs_mutex` - A reference to the global file system mutex.
-	pub fn ls(
+	pub async fn ls(
 		&self,
 		path: &str,
-		fs_mutex: &Mutex<GLOBALFSType>,
+		fs_mutex: &AsyncMutex<GLOBALFSType>,
 	) {
 		if path.is_empty() {
 			println!("Usage: ls <path>");
 			return;
 		}
 
-		let mut fs = fs_mutex.lock();
+		let mut fs = fs_mutex.lock().await;
 		let result = fs.list_file(path);
-		drop(fs); // Explicitly release the lock before doing slow VGA/Serial printing
+		drop(fs);
 
 		match result {
 			Ok(files) => {
@@ -55,17 +56,17 @@ impl Fsc {
 	/// # Arguments
 	/// * `path` - The path of the file to create.
 	/// * `fs_mutex` - A reference to the global file system mutex.
-	pub fn touch(
+	pub async fn touch(
 		&self,
 		path: &str,
-		fs_mutex: &Mutex<GLOBALFSType>,
+		fs_mutex: &AsyncMutex<GLOBALFSType>,
 	) {
 		if path.is_empty() {
 			println!("Usage: touch <path>");
 			return;
 		}
 
-		let mut fs = fs_mutex.lock();
+		let mut fs = fs_mutex.lock().await;
 		let result = fs.create_file(path);
 		drop(fs);
 
@@ -80,17 +81,17 @@ impl Fsc {
 	/// # Arguments
 	/// * `path` - The path of the directory to create.
 	/// * `fs_mutex` - A reference to the global file system mutex.
-	pub fn mkdir(
+	pub async fn mkdir(
 		&self,
 		path: &str,
-		fs_mutex: &Mutex<GLOBALFSType>,
+		fs_mutex: &AsyncMutex<GLOBALFSType>,
 	) {
 		if path.is_empty() {
 			println!("Usage: mkdir <path>");
 			return;
 		}
 
-		let mut fs = fs_mutex.lock();
+		let mut fs = fs_mutex.lock().await;
 		let result = fs.create_directory(path);
 		drop(fs);
 
@@ -105,17 +106,17 @@ impl Fsc {
 	/// # Arguments
 	/// * `path` - The path of the file to delete.
 	/// * `fs_mutex` - A reference to the global file system mutex.
-	pub fn rm(
+	pub async fn rm(
 		&self,
 		path: &str,
-		fs_mutex: &Mutex<GLOBALFSType>,
+		fs_mutex: &AsyncMutex<GLOBALFSType>,
 	) {
 		if path.is_empty() {
 			println!("Usage: rm <path>");
 			return;
 		}
 
-		let mut fs = fs_mutex.lock();
+		let mut fs = fs_mutex.lock().await;
 		let result = fs.delete_file(path);
 		drop(fs);
 
@@ -130,17 +131,17 @@ impl Fsc {
 	/// # Arguments
 	/// * `path` - The path of the file to read.
 	/// * `fs_mutex` - A reference to the global file system mutex.
-	pub fn cat(
+	pub async fn cat(
 		&self,
 		path: &str,
-		fs_mutex: &Mutex<GLOBALFSType>,
+		fs_mutex: &AsyncMutex<GLOBALFSType>,
 	) {
 		if path.is_empty() {
 			println!("Usage: cat <path>");
 			return;
 		}
 
-		let mut fs = fs_mutex.lock();
+		let mut fs = fs_mutex.lock().await;
 		let handle_result = fs.open_file(path);
 
 		match handle_result {
@@ -166,18 +167,18 @@ impl Fsc {
 	/// * `path` - The path of the file to write to.
 	/// * `lines` - A slice containing string references representing lines of text.
 	/// * `fs_mutex` - A reference to the global file system mutex.
-	pub fn write(
+	pub async fn write(
 		&self,
 		path: &str,
 		lines: &[&str],
-		fs_mutex: &Mutex<GLOBALFSType>,
+		fs_mutex: &AsyncMutex<GLOBALFSType>,
 	) {
 		if path.is_empty() {
 			println!("Usage: write <path> [content]");
 			return;
 		}
 
-		let mut fs = fs_mutex.lock();
+		let mut fs = fs_mutex.lock().await;
 
 		let handle = match fs.open_file(path) {
 			Ok(h) => h,
@@ -200,4 +201,3 @@ impl Fsc {
 		}
 	}
 }
-

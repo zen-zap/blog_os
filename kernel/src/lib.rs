@@ -30,14 +30,14 @@ pub mod vga_buffer;
 pub mod virtio;
 
 use conquer_once::spin::OnceCell;
-use spin::Mutex;
+use no_std_async::Mutex as AsyncMutex;
 use x86_64::instructions::port::Port;
 
 pub use crate::fs::simple_fs::GLOBALFSType;
 
 /// The global handle to the Simple File System (SFS).
 /// Initialized once the VirtIO block device is mounted during boot.
-pub static GLOBAL_FS: OnceCell<Mutex<GLOBALFSType>> = OnceCell::uninit();
+pub static GLOBAL_FS: OnceCell<AsyncMutex<GLOBALFSType>> = OnceCell::uninit();
 
 /// Initializes core CPU structures (GDT, IDT) and enables hardware interrupts.
 ///
