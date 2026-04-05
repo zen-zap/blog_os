@@ -165,6 +165,7 @@ dependencies = [
  "lazy_static",
  "linked_list_allocator",
  "no-std-async",
+ "noto-sans-mono-bitmap",
  "pc-keyboard",
  "spin 0.5.2",
  "static_assertions",
@@ -443,6 +444,12 @@ dependencies = [
  "pin-project",
  "spin 0.9.8",
 ]
+
+[[package]]
+name = "noto-sans-mono-bitmap"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f102c477fd4ec864c149803bf606ecc23bc9329602ec0f99073a728abf454abc"
 
 [[package]]
 name = "once_cell"

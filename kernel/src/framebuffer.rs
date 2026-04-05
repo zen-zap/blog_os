@@ -1,5 +1,6 @@
 use bootloader_api::info::{FrameBuffer, FrameBufferInfo, PixelFormat};
 use core::fmt::{self, Write};
+use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster};
 use spin::Mutex;
 
 /// This struct holds a static mutable reference to the framebuffer alongwith
@@ -24,6 +25,9 @@ pub static GRAPHICS_WRITER: Mutex<Option<GraphicsWriter>> = Mutex::new(None);
 // without the framebuffer yet to be initialized
 // there would be nothing to print to
 // so it would just be None
+
+const FONT_WEIGHT: FontWeight = FontWeight::Regular;
+const FONT_SIZE: RasterHeight = RasterHeight::Size16;
 
 impl GraphicsWriter {
 	pub fn new(fb: &'static mut FrameBuffer) -> Self {
@@ -72,6 +76,56 @@ impl GraphicsWriter {
 				},
 				_ => {},
 			}
+		}
+	}
+
+	/// moving the cursor one line below
+	fn newline(&mut self) {
+		self.x_pos = 0;
+		self.y_pos += FONT_SIZE.val() + 2; // 2px line spacing
+
+		// wrap to top if we hit 0
+		// no scrolling yet. probably have to store things in a buffer
+		// and re-render them on scroll?
+		if self.y_pos >= self.info.height {
+			self.y_pos = 0;
+		}
+	}
+
+	/// writing a new char
+	fn write_char(
+		&mut self,
+		c: char,
+	) {
+		match c {
+			'\n' => self.newline(),
+			'\r' => self.x_pos = 0,
+			_ => {
+				let char_raster = get_raster(c, FONT_WEIGHT, FONT_SIZE)
+					.unwrap_or_else(|| get_raster(' ', FONT_WEIGHT, FONT_SIZE).unwrap());
+
+				for (row_i, row) in char_raster.raster().iter().enumerate() {
+					for (col_i, intensity) in row.iter().enumerate() {
+						if *intensity > 0 {
+							self.set_pixel(
+								self.x_pos + col_i,
+								self.y_pos + row_i,
+								*intensity,
+								*intensity,
+								*intensity,
+							);
+						}
+					}
+				}
+
+				// move cursor forward by the width of the character
+				self.x_pos += char_raster.width();
+
+				// we overflow out of the given width
+				if self.x_pos >= self.info.width {
+					self.newline();
+				}
+			},
 		}
 	}
 

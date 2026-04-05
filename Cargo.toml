@@ -5,8 +5,8 @@ members = [
 ]
 resolver = "2"
 
-
 [profile.dev]
+debug = true
 panic = "abort"
 
 [profile.release]

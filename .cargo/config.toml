@@ -1,0 +1,5 @@
+[target.'cfg(all(target_arch = "x86_64", target_os = "none"))']
+rustflags = ["-C", "force-frame-pointers=yes"]
+
+[build]
+rustflags = ["-C", "force-frame-pointers=yes"]
