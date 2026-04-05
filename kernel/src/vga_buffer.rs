@@ -207,7 +207,7 @@ lazy_static! { // so that this is only made once in the runtime
 	});
 }
 
-#[macro_export] // makes it available for the entire crate to use
+//#[macro_export] // makes it available for the entire crate to use
 macro_rules! print {
     // tt stands for token tree
     // ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
@@ -216,8 +216,8 @@ macro_rules! print {
     // this macro invokes _print
 }
 
-// Picked from the standard library
-#[macro_export]
+// implementation Picked from the standard library
+//#[macro_export]
 macro_rules! println {
     // () => ($crate::print!("\n"));
     // ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));

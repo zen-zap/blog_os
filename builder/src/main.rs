@@ -56,6 +56,8 @@ fn main() {
 	} else {
 		cmd.arg("-display").arg("gtk,zoom-to-fit=on");
 		cmd.arg("-vga").arg("std");
+		// this tells qemu to emulate a Bochs VBE compatible graphics card
+		// in UEFI, OVMF detects the vga hardware and uses the GOP to init the framebuffer
 		cmd.arg("-global").arg("VGA.xres=1280");
 		cmd.arg("-global").arg("VGA.yres=800");
 	}

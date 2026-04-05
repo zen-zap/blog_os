@@ -28,7 +28,7 @@ use creo::{
 	},
 };
 use creo::{
-	allocator, debug, debug_if, error, fs_debug, info,
+	allocator, debug, debug_if, error, framebuffer, fs_debug, info,
 	interrupts::InterruptIndex::Keyboard,
 	memory::{self, BitmapFrameAllocator, translate_addr},
 	memory_debug, pci_debug, print, println,
@@ -77,6 +77,23 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
 	let rsdp_addr = boot_info.rsdp_addr.into_option().expect("Bootloader failed to find ACPI RSDP");
 	info!("  - ACPI RSDP Address: {:#x}", rsdp_addr);
+
+	let framebuffer = boot_info
+		.framebuffer
+		.as_mut()
+		.expect("Unable to extract framebuffer information from boot_info");
+
+	// thing to note here
+	// if this panics now
+	// we would go to the panic handler
+	// which uses info!
+	// which in turn uses the print functionality ..
+	// but we still don't have the framebuffer setup so no info here?
+
+	// we have a framebuffer now, so we can safely send it to graphics writer for use
+	framebuffer::GRAPHICS_WRITER
+		.lock()
+		.replace(framebuffer::GraphicsWriter::new(framebuffer));
 
 	creo::init();
 
