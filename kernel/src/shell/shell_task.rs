@@ -75,7 +75,7 @@ async fn process_command(line: &str) {
 			println!("{}", args.join(" "));
 		},
 		"whoami" => {
-			println!("zen-zap");
+			println!("GOD");
 		},
 		"clear" => {
 			for _ in 0..100 {
@@ -83,7 +83,11 @@ async fn process_command(line: &str) {
 			}
 		},
 		"shutdown" | "exit" => {
-			println!("shutting down...");
+			println!("lmao alright... goodbye");
+			for i in 0..5000000 {
+				// it shuts down too fast to see the message
+				core::hint::spin_loop();
+			}
 			crate::exit_qemu(crate::QemuExitCode::Success);
 		},
 		"panic" => {

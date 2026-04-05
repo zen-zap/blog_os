@@ -18,7 +18,10 @@ static_assertions = "1.1.0"
 bootloader_api = { version = "0.11.15" }
 acpi = "6.1.1"
 no-std-async = "1.1.2"
-noto-sans-mono-bitmap = "0.3.2"
+
+[dependencies.noto-sans-mono-bitmap]
+version = "0.3.2"
+features = ["regular", "size_16", "size_32", "size_24", "size_20", "font_weights_all", "unicode-specials"]
 
 [dependencies.lazy_static]
 version = "1.0"

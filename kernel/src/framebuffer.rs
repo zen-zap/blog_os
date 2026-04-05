@@ -1,6 +1,6 @@
 use bootloader_api::info::{FrameBuffer, FrameBufferInfo, PixelFormat};
 use core::fmt::{self, Write};
-use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster};
+use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster, get_raster_width};
 use spin::Mutex;
 
 /// This struct holds a static mutable reference to the framebuffer alongwith
@@ -27,12 +27,14 @@ pub static GRAPHICS_WRITER: Mutex<Option<GraphicsWriter>> = Mutex::new(None);
 // so it would just be None
 
 const FONT_WEIGHT: FontWeight = FontWeight::Regular;
-const FONT_SIZE: RasterHeight = RasterHeight::Size16;
+const FONT_SIZE: RasterHeight = RasterHeight::Size20;
 
 impl GraphicsWriter {
 	pub fn new(fb: &'static mut FrameBuffer) -> Self {
 		let info = fb.info();
-		GraphicsWriter { framebuffer: fb.buffer_mut(), info, x_pos: 0, y_pos: 0 }
+		let mut writer = GraphicsWriter { framebuffer: fb.buffer_mut(), info, x_pos: 0, y_pos: 0 };
+		writer.clear();
+		writer
 	}
 
 	fn set_pixel(
@@ -82,13 +84,27 @@ impl GraphicsWriter {
 	/// moving the cursor one line below
 	fn newline(&mut self) {
 		self.x_pos = 0;
-		self.y_pos += FONT_SIZE.val() + 2; // 2px line spacing
+		let line_height = FONT_SIZE.val() + 2; // 2px line spacing
 
-		// wrap to top if we hit 0
-		// no scrolling yet. probably have to store things in a buffer
-		// and re-render them on scroll?
-		if self.y_pos >= self.info.height {
-			self.y_pos = 0;
+		self.y_pos += line_height;
+
+		if self.y_pos + line_height >= self.info.height {
+			let bytes_per_row = self.info.stride * self.info.bytes_per_pixel;
+			let bytes_per_text_line = line_height * bytes_per_row;
+			let total_bytes = self.info.height * bytes_per_row;
+
+			// self.framebuffer[0..bytes_per_text_line].fill(0); // this is not necessary?
+			// copy_within just overwrites everything!
+
+			self.framebuffer.copy_within(bytes_per_text_line..total_bytes, 0);
+			// this selects from line2 (initial offset) to the entire thing
+			// and moves it up to 0th index ...
+			// the 0th index is overwritten or maybe just clear it?
+
+			let clear_start = total_bytes - bytes_per_text_line;
+			self.framebuffer[clear_start..total_bytes].fill(0);
+
+			self.y_pos -= line_height; // stay at bottom line
 		}
 	}
 
@@ -100,6 +116,12 @@ impl GraphicsWriter {
 		match c {
 			'\n' => self.newline(),
 			'\r' => self.x_pos = 0,
+			'\u{8}' => {
+				let char_width = get_raster_width(FONT_WEIGHT, FONT_SIZE);
+				if self.x_pos >= char_width {
+					self.x_pos -= char_width;
+				}
+			},
 			_ => {
 				let char_raster = get_raster(c, FONT_WEIGHT, FONT_SIZE)
 					.unwrap_or_else(|| get_raster(' ', FONT_WEIGHT, FONT_SIZE).unwrap());
@@ -114,6 +136,8 @@ impl GraphicsWriter {
 								*intensity,
 								*intensity,
 							);
+						} else {
+							self.set_pixel(self.x_pos + col_i, self.y_pos + row_i, 0, 0, 0);
 						}
 					}
 				}
@@ -129,11 +153,19 @@ impl GraphicsWriter {
 		}
 	}
 
+	fn clear(&mut self) {
+		self.framebuffer.fill(0); // fill with black
+		self.x_pos = 0;
+		self.y_pos = 0;
+	}
+
 	fn write_string(
 		&mut self,
 		s: &str,
 	) {
-		todo!();
+		for c in s.chars() {
+			self.write_char(c);
+		}
 	}
 }
 
