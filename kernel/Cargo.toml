@@ -1,0 +1,61 @@
+[package]
+name = "creo"
+version = "0.2.0"
+authors = ["zen-zap"]
+edition = "2021"
+resolver = "2"
+
+[dependencies]
+volatile = "0.2.6"
+spin = "0.5.2"
+x86_64 = "0.14.2"
+uart_16550 = "0.2.0"
+pc-keyboard = "0.7.0"
+linked_list_allocator = "0.9.0"
+virtio-drivers = "0.11"
+zerocopy = { version = "0.8.26", default-features = false, features = ["derive"] }
+static_assertions = "1.1.0"
+bootloader_api = { version = "0.11.15" }
+acpi = "6.1.1"
+no-std-async = "1.1.2"
+
+[dependencies.noto-sans-mono-bitmap]
+version = "0.3.2"
+features = ["regular", "size_16", "size_32", "size_24", "size_20", "font_weights_all", "unicode-specials"]
+
+[dependencies.lazy_static]
+version = "1.0"
+features = ["spin_no_std"]
+
+[dependencies.futures-util]
+version = "0.3.4"
+default-features = false
+features = ["alloc"]
+
+[dependencies.conquer-once]
+version = "0.2.0"
+default-features = false
+
+[dependencies.crossbeam-queue]
+version = "0.3.11"
+default-features = false
+features = ["alloc"]
+
+[features]
+default = []
+debug-fs = []
+debug-virtio = []
+debug-memory = []
+debug-hardware = []
+trace-all = ["debug-fs", "debug-virtio", "debug-memory", "debug-hardware"]
+
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "creo"
+path = "src/main.rs"
+test = false
+
+

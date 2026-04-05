@@ -1,11 +1,42 @@
-This follows Philipp Oppermann's blog [Writing an OS](https://os.phil-opp.com/) in Rust.
+# x86_64 OS
 
-After finishing the blog, I've made a simple file system here.
+This is an OS written entirely in Rust.
 
-Refinements and bug fixes remain.
+This initially started as a follow of Philipp Oppermann's blog [Writing an OS](https://os.phil-opp.com/) in Rust.
 
-[You can read about the project here](https://ashup.me/projects/blog-os)
+After finishing the blog, I've tried my hand at taking this further.
 
-The files are stored in a disk.img file. For creating a 64MiB raw file use:
+I work on this on and off, so refinements and bug fixes always remain.
 
-`dd if=/dev/zero of=disk.img bs=1M count=64`
+[I also wrote a blog about whatever I made here.](https://ashup.me/projects/creo-os) Pardon me if the blog is not updated with the latest code (will do it soon).
+
+Own Contributions so far [this is updated]:
+
+- Custom File System (includes VirtIO block device drivers)
+- Interrupt Handling with ACPI
+- Bitmap Frame Allocator
+
+## Setup:
+
+**Requirements:**
+
+- [Rust](https://rustup.rs/) (Nightly toolchain)
+- `llvm-tools-preview` component (`rustup component add llvm-tools-preview`)
+- [QEMU](https://www.qemu.org/download/) (Specifically `qemu-system-x86_64`)
+
+The files are stored in a disk.img file at project root. For creating a 64MiB raw file use:
+
+```bash
+dd if=/dev/zero of=disk.img bs=1M count=64
+```
+
+To compile the kernel, build the bootloader and launch the OS in QEMU:
+
+```bash
+cargo run --bin builder
+```
+
+### AI Usage:
+
+As modules grow older, I have cleaned them up and added documentation using AI.
+There was a lot of explanation comments that I wrote while first learning them. They were cluttering up the file. No major code was delegated to AI.

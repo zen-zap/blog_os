@@ -1,13 +1,2 @@
 [cargo]
-target = "x86_64-blog_os.json"
-autoreload = true
-allTargets = false
-
-[cargo.buildScripts]
-enable = false
-
-[procMacro]
-enable = false
-
-[checkOnSave]
-enable = false
+target = "x86_64-unknown-none"

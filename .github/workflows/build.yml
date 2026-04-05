@@ -1,41 +1,57 @@
-name: Running Build
+name: Creo OS
+
+permissions:
+  contents: read
 
 on:
   push:
-    branches:
-      - main
+    branches: ["**"]
   pull_request:
+    branches: ["**"]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build_and_test:
+    if: "contains(github.event.head_commit.message, '[run ci]') || github.event_name == 'pull_request'"
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Setup Nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly-x86_64-unknown-linux-gnu
-          override: true
-          components: rust-src, llvm-tools-preview
+          components: rust-src, llvm-tools-preview, clippy, rustfmt 
+          targets: x86_64-unknown-none
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache Cargo Registry and Build
+        uses: Swatinem/rust-cache@v2
 
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+      # - name: Check Formatting
+      #   run: cargo fmt --all -- --check
 
-      - name: Install bootimage
-        run: cargo install bootimage
+      # - name: Run Clippy
+      #   # -- -D warnings turns all warnings into errors, so the CI will fail if there are any clippy warnings. Add it later.
+      #   run: cargo clippy --package creo --target x86_64-unknown-none
 
-      - name: Build project
-        run: cargo build --verbose --target x86_64-blog_os.json
+      - name: Cache Cargo Registry and Build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86
+
+      - name: Build Kernel
+        run: cargo build --package creo --target x86_64-unknown-none
+
+      - name: Build Orchestrator
+        run: cargo build --package builder
+
+      - name: Create disk.img
+        run: dd if=/dev/zero of=disk.img bs=1M count=64
+
+      - name: Boot Test (60 Second Timeout)
+        run: |
+          timeout 60s cargo run --bin builder || if [ $? -eq 124 ]; then exit 0; else exit 1; fi
+        env:
+          CI: "true"

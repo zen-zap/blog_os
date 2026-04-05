@@ -1,17 +1,5 @@
-# .cargo/config.toml
-
-[profile.dev]
-debug = true
-overflow-checks = true
-panic = "abort"
+[target.'cfg(all(target_arch = "x86_64", target_os = "none"))']
+rustflags = ["-C", "force-frame-pointers=yes"]
 
 [build]
-target = "x86_64-blog_os.json"
-
-[unstable]
-build-std-features = ["compiler-builtins-mem"]
-build-std = ["core", "compiler_builtins", "alloc"]
-
-[target.x86_64-blog_os]
 rustflags = ["-C", "force-frame-pointers=yes"]
-runner = "bootimage runner"

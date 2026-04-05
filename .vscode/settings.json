@@ -1,9 +1,29 @@
 {
-    "rust-analyzer.cargo.target": "x86_64-blog_os.json",
     "rust-analyzer.cargo.buildScripts.enable": false,
     "rust-analyzer.procMacro.enable": false,
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.checkOnSave": false,
     "rust-analyzer.cargo.autoreload": true,
-    "rust-analyzer.rustc.source": null
+    "rust-analyzer.rustc.source": null,
+    "cSpell.words": [
+        "acpi",
+        "apic",
+        "apics",
+        "creo",
+        "GLOBALFS",
+        "iobase",
+        "ioregsel",
+        "iowin",
+        "keyevent",
+        "keypresses",
+        "rsdp",
+        "scanc",
+        "scancode",
+        "scancodes",
+        "sivr",
+        "uninit",
+        "vaddr",
+        "Virt",
+        "virtio"
+    ]
 }
