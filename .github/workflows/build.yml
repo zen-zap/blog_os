@@ -1,5 +1,8 @@
 name: Creo OS
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: ["**"]
